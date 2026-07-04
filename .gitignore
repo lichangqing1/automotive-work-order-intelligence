@@ -1,0 +1,19 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Jupyter Notebook Checkpoints & Cache
+.ipynb_checkpoints/
+.pytest_cache/
+
+# Local Data and Model Outputs (Do not push massive data frames to GitHub)
+data/
+*.csv
+*.xlsx
+*.pkl
+*.joblib
+
+# OS generated files
+.DS_Store
+Thumbs.db
