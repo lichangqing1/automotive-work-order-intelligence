@@ -38,6 +38,10 @@ jobs:
         run: pytest --cov=automotive_quality --cov=automotive --cov-report=term-missing -q
       - name: AI regression evaluation and policies
         run: python scripts/run_ai_evaluation.py
+      - name: Reset ephemeral database for runtime smoke build
+        run: |
+          alembic downgrade base
+          alembic upgrade head
       - name: Authoritative enterprise runtime smoke build
         run: python scripts/run_enterprise_platform.py --rows 1000 --dataset-version ci-smoke
 
