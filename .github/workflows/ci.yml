@@ -40,7 +40,7 @@ jobs:
         run: python scripts/run_ai_evaluation.py
       - name: Reset ephemeral database for runtime smoke build
         run: |
-          alembic downgrade base
+          PGPASSWORD=automotive psql -h localhost -U automotive -d automotive_test -c 'DROP SCHEMA public CASCADE; CREATE SCHEMA public;'
           alembic upgrade head
       - name: Authoritative enterprise runtime smoke build
         run: python scripts/run_enterprise_platform.py --rows 1000 --dataset-version ci-smoke
