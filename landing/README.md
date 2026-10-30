@@ -2,7 +2,10 @@
 
 This site is the 60-second, evidence-first introduction to the Automotive Work Order AI Quality Engineering Platform. It is intentionally separate from the Streamlit engineering console.
 
-**Live site:** https://automotive-ai-quality-engineering.dearmole20.chatgpt.site
+**Live site:**
+
+- English (default): https://automotive-ai-quality-engineering.dearmole20.chatgpt.site/en
+- 中文: https://automotive-ai-quality-engineering.dearmole20.chatgpt.site/zh
 
 Metrics are generated from the sanitized reports under `artifacts/ai_value/`:
 
@@ -12,7 +15,7 @@ cd landing
 pnpm dev
 ```
 
-Before publishing, regenerate the data and run `pnpm build`. The page presents the current `BLOCK` decisions and limitations rather than implying autonomous production approval.
+Before publishing, regenerate the data and run `pnpm build`. Both language routes use the same `public/project-metrics.json`; only the recruiter-facing copy changes. The page presents the current `BLOCK` decisions and limitations rather than implying autonomous production approval.
 
 To expose the recruiter-facing source buttons, configure the real public repository URL before building:
 
