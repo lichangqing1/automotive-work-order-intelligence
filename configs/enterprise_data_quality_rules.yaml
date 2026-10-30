@@ -1,0 +1,55 @@
+table: work_orders
+rules:
+  - name: work_order_id_unique
+    type: unique
+    column: work_order_id
+    severity: critical
+  - name: vehicle_required
+    type: not_null
+    column: vehicle_id
+    severity: critical
+  - name: vehicle_must_exist
+    type: foreign_key
+    column: vehicle_id
+    reference_table: vehicles
+    reference_column: vehicle_id
+    severity: critical
+  - name: valid_priority
+    type: allowed_values
+    column: priority
+    values: [P0, P1, P2, P3]
+    severity: critical
+  - name: valid_status
+    type: allowed_values
+    column: status
+    values: [OPEN, IN_PROGRESS, RESOLVED, CLOSED]
+    severity: critical
+  - name: valid_resolution_chronology
+    type: column_comparison
+    left: resolved_at
+    operator: ">="
+    right: created_at
+    severity: critical
+  - name: resolved_order_required_fields
+    type: conditional_not_null
+    condition:
+      status: [RESOLVED, CLOSED]
+    columns: [resolution, resolved_at]
+    severity: critical
+  - name: ota_order_requires_version
+    type: conditional_not_null
+    condition:
+      service_type: OTA
+    columns: [ota_version]
+    severity: critical
+  - name: work_order_id_format
+    type: regex
+    column: work_order_id
+    pattern: '^WO-[0-9]{7}$'
+    severity: warning
+  - name: valid_sla_hours
+    type: range
+    column: sla_hours
+    min_value: 1
+    max_value: 168
+    severity: critical

@@ -1,0 +1,76 @@
+{
+  "benchmark": {
+    "workOrders": 30000,
+    "injectedDefects": 1200,
+    "detectedDefects": 1200,
+    "falseNegatives": 0,
+    "falsePositives": 0,
+    "aiEvaluationCases": 60,
+    "checks": [
+      "Completeness",
+      "Validity",
+      "Temporal consistency",
+      "Cross-table integrity",
+      "Reconciliation",
+      "Business rules"
+    ]
+  },
+  "testGeneration": {
+    "runs": 3,
+    "gate": "BLOCK",
+    "coverage": [
+      {
+        "label": "Requirement coverage",
+        "baseline": 0.058333333333333334,
+        "ai": 0.49351851851851847
+      },
+      {
+        "label": "Negative coverage",
+        "baseline": 0.2,
+        "ai": 0.47962962962962963
+      },
+      {
+        "label": "Boundary coverage",
+        "baseline": 0.5,
+        "ai": 0.6666666666666666
+      },
+      {
+        "label": "Integration coverage",
+        "baseline": 0.4666666666666667,
+        "ai": 0.6
+      },
+      {
+        "label": "Data-quality coverage",
+        "baseline": 0.6666666666666666,
+        "ai": 0.8166666666666667
+      }
+    ],
+    "humanEffortSaving": 0.4898392758174765,
+    "rejectionRate": 0.6041514367984956,
+    "humanOnlyCoverage": 0.6377777777777778,
+    "aiCoverage": 0.49351851851851847
+  },
+  "rca": {
+    "runs": 3,
+    "gate": "BLOCK",
+    "baselineSeconds": 77.6,
+    "aiSeconds": 49.41111111111111,
+    "checkUsefulness": 0.7555555555555555,
+    "evidenceSupport": 0.9451851851851851,
+    "rootCauseAccuracy": 0.0,
+    "failureClassAccuracy": 0.0
+  },
+  "technology": [
+    "Python",
+    "FastAPI",
+    "PostgreSQL",
+    "SQL",
+    "pytest",
+    "Alembic",
+    "OpenAI",
+    "Jira REST API",
+    "Streamlit",
+    "Docker",
+    "GitHub Actions"
+  ]
+}

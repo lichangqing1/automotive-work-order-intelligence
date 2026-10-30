@@ -1,19 +1,21 @@
-# Byte-compiled / optimized / DLL files
+.venv/
+venv/
+.venv312/
 __pycache__/
 *.py[cod]
-*$py.class
-
-# Jupyter Notebook Checkpoints & Cache
-.ipynb_checkpoints/
+*.egg-info/
 .pytest_cache/
-
-# Local Data and Model Outputs (Do not push massive data frames to GitHub)
-data/
-*.csv
-*.xlsx
-*.pkl
-*.joblib
-
-# OS generated files
+.coverage
+htmlcov/
+.idea/
+.vscode/
 .DS_Store
-Thumbs.db
+__MACOSX/
+.env
+.env.*
+!.env.example
+data/raw/
+data/processed/
+*.sqlite
+results/runtime/
+results/ai_value/

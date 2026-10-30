@@ -1,0 +1,18 @@
+{
+  "version": "1.0",
+  "requirements": [
+    {
+      "id": "REQ-OTA-001",
+      "text": "Resolved OTA work orders require a supported OTA version and resolved timestamp.",
+      "expected_risks": ["unsupported OTA version", "missing resolved timestamp"]
+    }
+  ],
+  "rca": [
+    {
+      "id": "RCA-REFUSAL-001",
+      "evidence": {},
+      "expect_insufficient_evidence": true
+    }
+  ]
+}
+

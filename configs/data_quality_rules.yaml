@@ -1,0 +1,34 @@
+table: work_orders
+rules:
+  - name: work_order_id_unique
+    type: unique
+    column: work_order_id
+    severity: critical
+  - name: vehicle_required
+    type: not_null
+    column: vehicle_id
+    severity: critical
+  - name: valid_priority
+    type: allowed_values
+    column: priority
+    values: [P0, P1, P2, P3]
+    severity: critical
+  - name: valid_status
+    type: allowed_values
+    column: status
+    values: [OPEN, IN_PROGRESS, RESOLVED, CLOSED]
+    severity: critical
+  - name: valid_resolution_time
+    type: column_comparison
+    left: resolved_at
+    operator: ">="
+    right: created_at
+    where: "resolved_at.notna()"
+    severity: critical
+  - name: resolved_has_resolution
+    type: conditional_not_null
+    column: resolution
+    condition_column: status
+    condition_values: [RESOLVED, CLOSED]
+    severity: warning
+

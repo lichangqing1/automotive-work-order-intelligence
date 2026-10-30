@@ -1,0 +1,6 @@
+random_seed: 42
+test_size: 0.25
+classification_threshold: 0.50
+max_features: 1200
+retrieval_top_k: 5
+

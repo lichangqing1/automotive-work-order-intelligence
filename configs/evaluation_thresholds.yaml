@@ -1,0 +1,11 @@
+data_quality:
+  critical_failed_rules_max: 0
+ml:
+  roc_auc_min: 0.65
+  f1_min: 0.45
+retrieval:
+  hit_rate_at_5_min: 0.70
+  mrr_min: 0.60
+rag:
+  citation_validity_min: 1.0
+  unsupported_claim_rate_max: 0.0

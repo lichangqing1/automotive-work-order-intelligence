@@ -1,0 +1,212 @@
+{
+  "ai_assisted": {
+    "active_investigation_seconds": {
+      "max": 136.0,
+      "mean": 49.41111111111111,
+      "median": 46.0,
+      "min": 13.0,
+      "n": 90.0,
+      "stddev": 21.344213082209553
+    },
+    "citation_validity_rate": {
+      "max": 1.0,
+      "mean": 1.0,
+      "median": 1.0,
+      "min": 1.0,
+      "n": 90.0,
+      "stddev": 0.0
+    },
+    "correct_abstention": {
+      "max": 1.0,
+      "mean": 0.13333333333333333,
+      "median": 0.0,
+      "min": 0.0,
+      "n": 90.0,
+      "stddev": 0.339934634239519
+    },
+    "evidence_correctness_rate": {
+      "max": 1.0,
+      "mean": 0.9451851851851851,
+      "median": 1.0,
+      "min": 0.0,
+      "n": 90.0,
+      "stddev": 0.19362118488768573
+    },
+    "evidence_support_rate": {
+      "max": 1.0,
+      "mean": 0.9451851851851851,
+      "median": 1.0,
+      "min": 0.0,
+      "n": 90.0,
+      "stddev": 0.19362118488768573
+    },
+    "failure_class_accuracy": {
+      "max": 0.0,
+      "mean": 0.0,
+      "median": 0.0,
+      "min": 0.0,
+      "n": 90.0,
+      "stddev": 0.0
+    },
+    "recommended_check_usefulness": {
+      "max": 1.0,
+      "mean": 0.7555555555555555,
+      "median": 0.75,
+      "min": 0.5,
+      "n": 90.0,
+      "stddev": 0.16235154662447174
+    },
+    "root_cause_accuracy": {
+      "max": 0.0,
+      "mean": 0.0,
+      "median": 0.0,
+      "min": 0.0,
+      "n": 90.0,
+      "stddev": 0.0
+    },
+    "unsupported_claim_rate": {
+      "max": 1.0,
+      "mean": 0.054814814814814816,
+      "median": 0.0,
+      "min": 0.0,
+      "n": 90.0,
+      "stddev": 0.19362118488768573
+    }
+  },
+  "baseline": {
+    "active_investigation_seconds": {
+      "max": 125.0,
+      "mean": 77.6,
+      "median": 71.5,
+      "min": 40.0,
+      "n": 30.0,
+      "stddev": 21.04851538707659
+    },
+    "citation_validity_rate": {
+      "max": 1.0,
+      "mean": 1.0,
+      "median": 1.0,
+      "min": 1.0,
+      "n": 30.0,
+      "stddev": 0.0
+    },
+    "correct_abstention": {
+      "max": 1.0,
+      "mean": 0.16666666666666666,
+      "median": 0.0,
+      "min": 0.0,
+      "n": 30.0,
+      "stddev": 0.37267799624996495
+    },
+    "evidence_correctness_rate": {
+      "max": 1.0,
+      "mean": 1.0,
+      "median": 1.0,
+      "min": 1.0,
+      "n": 30.0,
+      "stddev": 0.0
+    },
+    "evidence_support_rate": {
+      "max": 1.0,
+      "mean": 1.0,
+      "median": 1.0,
+      "min": 1.0,
+      "n": 30.0,
+      "stddev": 0.0
+    },
+    "failure_class_accuracy": {
+      "max": 1.0,
+      "mean": 0.36666666666666664,
+      "median": 0.0,
+      "min": 0.0,
+      "n": 30.0,
+      "stddev": 0.4818944098266987
+    },
+    "root_cause_accuracy": {
+      "max": 1.0,
+      "mean": 0.2,
+      "median": 0.0,
+      "min": 0.0,
+      "n": 30.0,
+      "stddev": 0.4
+    },
+    "unsupported_claim_rate": {
+      "max": 0.0,
+      "mean": 0.0,
+      "median": 0.0,
+      "min": 0.0,
+      "n": 30.0,
+      "stddev": 0.0
+    }
+  },
+  "conclusion": "Measured comparison complete. Interpret gains and regressions metric-by-metric; do not claim universal AI superiority.",
+  "difference_ai_minus_baseline": {
+    "active_investigation_seconds": -28.188888888888883,
+    "citation_validity_rate": 0.0,
+    "correct_abstention": -0.033333333333333326,
+    "evidence_correctness_rate": -0.05481481481481487,
+    "evidence_support_rate": -0.05481481481481487,
+    "failure_class_accuracy": -0.36666666666666664,
+    "root_cause_accuracy": -0.2,
+    "unsupported_claim_rate": 0.054814814814814816
+  },
+  "experiment": {
+    "api_max_retries": 5,
+    "api_timeout_seconds": 120.0,
+    "dataset": "evaluation/ai_value/rca_cases.jsonl",
+    "dataset_sha256": "bf2e4953f9c9a81995a51697bd12a8847fa20805fc402080b4dba725ab916238",
+    "dataset_version": "ai-value-v1",
+    "experiment": "rca",
+    "experiment_id": "EXP-20261029T132933Z-4731BD11",
+    "model": "gpt-5-mini",
+    "prompt_version": "v2",
+    "provider": "openai",
+    "publishable": true,
+    "runs": 3,
+    "source_experiment_id": "EXP-20261028T141922Z-AEB083B0",
+    "started_at": "2026-10-29T13:29:33.276894+00:00"
+  },
+  "quality_gates": {
+    "evaluations": [
+      {
+        "actual": 0.9451851851851851,
+        "metric": "ai.evidence_support_rate",
+        "operator": ">=",
+        "passed": true,
+        "threshold": 0.9
+      },
+      {
+        "actual": 0.054814814814814816,
+        "metric": "ai.unsupported_claim_rate",
+        "operator": "<=",
+        "passed": false,
+        "threshold": 0.05
+      },
+      {
+        "actual": 0.13333333333333333,
+        "metric": "ai.correct_abstention",
+        "operator": ">=",
+        "passed": false,
+        "threshold": 0.9
+      },
+      {
+        "actual": 0.0,
+        "metric": "ai.root_cause_accuracy",
+        "operator": ">=",
+        "passed": false,
+        "threshold": 0.7
+      }
+    ],
+    "policy_status": "proposed_until_calibrated",
+    "status": "BLOCK"
+  },
+  "review_completeness": {
+    "actual_count": 90,
+    "complete": true,
+    "duplicate_count": 0,
+    "expected_count": 90,
+    "missing_count": 0,
+    "unexpected_count": 0
+  },
+  "reviewed": true
+}

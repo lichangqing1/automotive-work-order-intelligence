@@ -1,0 +1,11 @@
+policies:
+  - metric: requirement.schema_validity
+    operator: ">="
+    threshold: 1.0
+  - metric: requirement.risk_coverage
+    operator: ">="
+    threshold: 0.90
+  - metric: rca.refusal_correctness
+    operator: ">="
+    threshold: 1.0
+

@@ -1,0 +1,356 @@
+{
+  "ai_assisted": {
+    "active_review_seconds": {
+      "max": 321.0,
+      "mean": 184.1,
+      "median": 177.5,
+      "min": 81.0,
+      "n": 90.0,
+      "stddev": 48.666678082190444
+    },
+    "approval_rate": {
+      "max": 1.0,
+      "mean": 0.3958485632015044,
+      "median": 0.3038461538461539,
+      "min": 0.0,
+      "n": 90.0,
+      "stddev": 0.2979634209717928
+    },
+    "boundary_coverage": {
+      "max": 1.0,
+      "mean": 0.6666666666666666,
+      "median": 1.0,
+      "min": 0.0,
+      "n": 90.0,
+      "stddev": 0.4714045207910317
+    },
+    "data_quality_coverage": {
+      "max": 1.0,
+      "mean": 0.8166666666666667,
+      "median": 1.0,
+      "min": 0.0,
+      "n": 90.0,
+      "stddev": 0.38333333333333336
+    },
+    "duplicate_rate": {
+      "max": 0.0,
+      "mean": 0.0,
+      "median": 0.0,
+      "min": 0.0,
+      "n": 90.0,
+      "stddev": 0.0
+    },
+    "edit_rate": {
+      "max": 0.0,
+      "mean": 0.0,
+      "median": 0.0,
+      "min": 0.0,
+      "n": 90.0,
+      "stddev": 0.0
+    },
+    "end_to_end_seconds": {
+      "max": 504.9033190757036,
+      "mean": 292.3001271203367,
+      "median": 283.8689426800702,
+      "min": 168.60400899872184,
+      "n": 90.0,
+      "stddev": 56.691194425805534
+    },
+    "executable_rate": {
+      "max": 1.0,
+      "mean": 1.0,
+      "median": 1.0,
+      "min": 1.0,
+      "n": 90.0,
+      "stddev": 0.0
+    },
+    "generation_seconds": {
+      "max": 183.90331907570362,
+      "mean": 108.20012712033673,
+      "median": 102.69134893314913,
+      "min": 79.24095001863316,
+      "n": 90.0,
+      "stddev": 19.786335342248137
+    },
+    "integration_coverage": {
+      "max": 1.0,
+      "mean": 0.6,
+      "median": 1.0,
+      "min": 0.0,
+      "n": 90.0,
+      "stddev": 0.4898979485566356
+    },
+    "negative_coverage": {
+      "max": 1.0,
+      "mean": 0.47962962962962963,
+      "median": 0.5,
+      "min": 0.0,
+      "n": 90.0,
+      "stddev": 0.45053313944633305
+    },
+    "rejection_rate": {
+      "max": 1.0,
+      "mean": 0.6041514367984956,
+      "median": 0.6961538461538461,
+      "min": 0.0,
+      "n": 90.0,
+      "stddev": 0.2979634209717928
+    },
+    "requirement_coverage": {
+      "max": 1.0,
+      "mean": 0.49351851851851847,
+      "median": 0.5,
+      "min": 0.0,
+      "n": 90.0,
+      "stddev": 0.3151101555819673
+    },
+    "schema_validity": {
+      "max": 1.0,
+      "mean": 1.0,
+      "median": 1.0,
+      "min": 1.0,
+      "n": 90.0,
+      "stddev": 0.0
+    },
+    "unsupported_assumption_rate": {
+      "max": 1.0,
+      "mean": 1.0,
+      "median": 1.0,
+      "min": 1.0,
+      "n": 90.0,
+      "stddev": 0.0
+    }
+  },
+  "baseline": {
+    "active_review_seconds": {
+      "max": 70.0,
+      "mean": 36.2,
+      "median": 32.5,
+      "min": 20.0,
+      "n": 30.0,
+      "stddev": 12.009440730802858
+    },
+    "approval_rate": {
+      "max": 1.0,
+      "mean": 0.06666666666666667,
+      "median": 0.0,
+      "min": 0.0,
+      "n": 30.0,
+      "stddev": 0.24944382578492943
+    },
+    "boundary_coverage": {
+      "max": 1.0,
+      "mean": 0.5,
+      "median": 0.5,
+      "min": 0.0,
+      "n": 30.0,
+      "stddev": 0.5
+    },
+    "data_quality_coverage": {
+      "max": 1.0,
+      "mean": 0.6666666666666666,
+      "median": 1.0,
+      "min": 0.0,
+      "n": 30.0,
+      "stddev": 0.4714045207910317
+    },
+    "duplicate_rate": {
+      "max": 0.0,
+      "mean": 0.0,
+      "median": 0.0,
+      "min": 0.0,
+      "n": 30.0,
+      "stddev": 0.0
+    },
+    "edit_rate": {
+      "max": 1.0,
+      "mean": 0.06666666666666667,
+      "median": 0.0,
+      "min": 0.0,
+      "n": 30.0,
+      "stddev": 0.24944382578492943
+    },
+    "executable_rate": {
+      "max": 1.0,
+      "mean": 1.0,
+      "median": 1.0,
+      "min": 1.0,
+      "n": 30.0,
+      "stddev": 0.0
+    },
+    "integration_coverage": {
+      "max": 1.0,
+      "mean": 0.4666666666666667,
+      "median": 0.0,
+      "min": 0.0,
+      "n": 30.0,
+      "stddev": 0.49888765156985887
+    },
+    "negative_coverage": {
+      "max": 1.0,
+      "mean": 0.2,
+      "median": 0.0,
+      "min": 0.0,
+      "n": 30.0,
+      "stddev": 0.4
+    },
+    "rejection_rate": {
+      "max": 1.0,
+      "mean": 0.9333333333333333,
+      "median": 1.0,
+      "min": 0.0,
+      "n": 30.0,
+      "stddev": 0.24944382578492943
+    },
+    "requirement_coverage": {
+      "max": 1.0,
+      "mean": 0.058333333333333334,
+      "median": 0.0,
+      "min": 0.0,
+      "n": 30.0,
+      "stddev": 0.2206367049145621
+    },
+    "schema_validity": {
+      "max": 1.0,
+      "mean": 1.0,
+      "median": 1.0,
+      "min": 1.0,
+      "n": 30.0,
+      "stddev": 0.0
+    },
+    "unsupported_assumption_rate": {
+      "max": 0.0,
+      "mean": 0.0,
+      "median": 0.0,
+      "min": 0.0,
+      "n": 30.0,
+      "stddev": 0.0
+    }
+  },
+  "conclusion": "Measured comparison complete. Interpret gains and regressions metric-by-metric; do not claim universal AI superiority.",
+  "difference_ai_minus_baseline": {
+    "active_review_seconds": 147.89999999999998,
+    "approval_rate": 0.32918189653483776,
+    "boundary_coverage": 0.16666666666666663,
+    "data_quality_coverage": 0.15000000000000002,
+    "duplicate_rate": 0.0,
+    "edit_rate": -0.06666666666666667,
+    "executable_rate": 0.0,
+    "integration_coverage": 0.1333333333333333,
+    "negative_coverage": 0.2796296296296296,
+    "rejection_rate": -0.32918189653483776,
+    "requirement_coverage": 0.4351851851851851,
+    "schema_validity": 0.0,
+    "unsupported_assumption_rate": 1.0
+  },
+  "efficiency": {
+    "end_to_end_time_saving_rate": 0.19000518994918708,
+    "human_effort_saving_rate": 0.4898392758174765
+  },
+  "experiment": {
+    "api_max_retries": 5,
+    "api_timeout_seconds": 120.0,
+    "dataset": "evaluation/ai_value/requirements.jsonl",
+    "dataset_sha256": "9dfe5d3e6204f833852c8afa375192e729308a5be78259039ddf0b2ad542f13f",
+    "dataset_version": "ai-value-v1",
+    "experiment": "test-generation",
+    "experiment_id": "EXP-20261028T140042Z-D1B9B4C5",
+    "model": "gpt-5-mini",
+    "prompt_version": "v2",
+    "provider": "openai",
+    "publishable": true,
+    "runs": 3,
+    "source_experiment_id": "EXP-20261022T044058Z-2E53566B",
+    "started_at": "2026-10-28T14:00:42.095941+00:00"
+  },
+  "human_baseline_completeness": {
+    "actual_count": 30,
+    "complete": true,
+    "duplicate_count": 0,
+    "expected_count": 30,
+    "missing_count": 0,
+    "unexpected_count": 0
+  },
+  "human_only": {
+    "active_design_seconds": {
+      "max": 1416.0,
+      "mean": 360.8666666666667,
+      "median": 300.0,
+      "min": 110.0,
+      "n": 30.0,
+      "stddev": 244.97710550625382
+    },
+    "requirement_coverage": {
+      "max": 1.0,
+      "mean": 0.6377777777777778,
+      "median": 0.6,
+      "min": 0.25,
+      "n": 30.0,
+      "stddev": 0.2178146227335144
+    }
+  },
+  "quality_gates": {
+    "evaluations": [
+      {
+        "actual": 1.0,
+        "metric": "ai.schema_validity",
+        "operator": ">=",
+        "passed": true,
+        "threshold": 1.0
+      },
+      {
+        "actual": 0.49351851851851847,
+        "metric": "ai.requirement_coverage",
+        "operator": ">=",
+        "passed": false,
+        "threshold": 0.75
+      },
+      {
+        "actual": 0.47962962962962963,
+        "metric": "ai.negative_coverage",
+        "operator": ">=",
+        "passed": false,
+        "threshold": 0.75
+      },
+      {
+        "actual": 1.0,
+        "metric": "ai.executable_rate",
+        "operator": ">=",
+        "passed": true,
+        "threshold": 0.9
+      },
+      {
+        "actual": 0.0,
+        "metric": "ai.duplicate_rate",
+        "operator": "<=",
+        "passed": true,
+        "threshold": 0.2
+      },
+      {
+        "actual": 1.0,
+        "metric": "ai.unsupported_assumption_rate",
+        "operator": "<=",
+        "passed": false,
+        "threshold": 0.05
+      },
+      {
+        "actual": 0.3958485632015044,
+        "metric": "ai.approval_rate",
+        "operator": ">=",
+        "passed": false,
+        "threshold": 0.7
+      }
+    ],
+    "policy_status": "proposed_until_calibrated",
+    "status": "BLOCK"
+  },
+  "review_completeness": {
+    "actual_count": 1122,
+    "complete": true,
+    "duplicate_count": 0,
+    "expected_count": 1122,
+    "missing_count": 0,
+    "unexpected_count": 0
+  },
+  "reviewed": true
+}

@@ -1,0 +1,3 @@
+version: v1
+system: Generate review-required structured test specifications. Never decide execution pass or fail.
+

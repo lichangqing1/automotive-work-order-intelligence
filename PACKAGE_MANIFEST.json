@@ -1,0 +1,921 @@
+{
+  "created_at": "2026-10-30T06:41:49.133060+00:00",
+  "file_count": 181,
+  "files": [
+    {
+      "path": ".env.example",
+      "sha256": "d43d23e943231c5bd94b91d79be1283025796569feddfeccdc7663425478ad5e",
+      "size": 556
+    },
+    {
+      "path": ".github/workflows/ci.yml",
+      "sha256": "567fb6e97033c12d5b57e26c36ad3844d6ae0fde760d8a213a38db10e079619e",
+      "size": 2093
+    },
+    {
+      "path": ".gitignore",
+      "sha256": "7352c311b2a20c60300f99f05c4057c7f783ece5803f0b305408d4fbf51e41e1",
+      "size": 224
+    },
+    {
+      "path": "Dockerfile",
+      "sha256": "a1b593249e4f5f249a45cb33e2e79d6d6f84e773d783850debef98518d9def97",
+      "size": 387
+    },
+    {
+      "path": "README.md",
+      "sha256": "1b7fb14478c51d1d1e048e16cd3bfcc018a8b199f015c1b4aae4e6b88a4ca671",
+      "size": 14122
+    },
+    {
+      "path": "alembic.ini",
+      "sha256": "c63c1e4a3020d8f73d6ba3f2770b2645cd3698d999ef6a5517d3dd9d0ecf4f1a",
+      "size": 620
+    },
+    {
+      "path": "artifacts/ai_value/README.md",
+      "sha256": "8394360691f4a42cc964a36622c0f4e7e8c2d9e5793e1e57ad86235cd3af55b6",
+      "size": 5601
+    },
+    {
+      "path": "artifacts/ai_value/manifest.json",
+      "sha256": "dcc52fb217861a1c3d676cf4f0a3a74ed8c43e82db1949bc6f4fc7f9ab141aea",
+      "size": 1987
+    },
+    {
+      "path": "artifacts/ai_value/rca_report.json",
+      "sha256": "b9fa3c993382f99e79d8a83a34d380fccf32ee7c3239f8b5a3f8deb5f87f7c3c",
+      "size": 5068
+    },
+    {
+      "path": "artifacts/ai_value/test_generation_report.json",
+      "sha256": "1400d1d313689e779049b881e1a6f59a464aacc9ddf4fb3796e99bd06c13e712",
+      "size": 8270
+    },
+    {
+      "path": "configs/ai_quality_policies.yaml",
+      "sha256": "747859dc09bb5966e1e00003333fca42e0905218e462c32441811e37bbe8b965",
+      "size": 240
+    },
+    {
+      "path": "configs/ai_value_policies.yaml",
+      "sha256": "f9f16769833af70dd572d1348c1dab28eba0d273c4ff1c44f21c55ce9f4b8baf",
+      "size": 973
+    },
+    {
+      "path": "configs/data_quality_rules.yaml",
+      "sha256": "e3cf7e979f06ec0bcb7e7b57bffb789601c18f67a2bd7a661789fab68cc2034f",
+      "size": 838
+    },
+    {
+      "path": "configs/enterprise_data_quality_rules.yaml",
+      "sha256": "114429946354feb406066c15d73733c08cd0f044f6b8d15400b6d3f689b7a000",
+      "size": 1376
+    },
+    {
+      "path": "configs/evaluation_thresholds.yaml",
+      "sha256": "121f2c99fb54c600e5250b2e47b2915e9c983a56a260c98fa5ace54028434305",
+      "size": 205
+    },
+    {
+      "path": "configs/model_config.yaml",
+      "sha256": "ab4656379290cec1e74ea0e12150441393fb45a165682822a516c6390d36af84",
+      "size": 102
+    },
+    {
+      "path": "configs/quality_policies.yaml",
+      "sha256": "87c34187d3e2e7b7a0a2c83dcb83876ec8176b423b8c757f47843bcad620e24f",
+      "size": 501
+    },
+    {
+      "path": "dashboard/app.py",
+      "sha256": "ca9e19b739b01c8fb80d6dd2538aa760a27ba0d87a9a2a8726c4901c9b4983c5",
+      "size": 8033
+    },
+    {
+      "path": "docker-compose.yml",
+      "sha256": "1144ba149625188fe19294f90e26aad9345341a0fa8c6e6196fa645f20759c45",
+      "size": 1346
+    },
+    {
+      "path": "docs/AI_VALUE_EVALUATION.md",
+      "sha256": "c3de84a9966e4b16985c93bcce7e112e7d12eeeab346339e62dcad33666ec325",
+      "size": 2895
+    },
+    {
+      "path": "docs/AUTOMOTIVE_ARCHITECTURE.md",
+      "sha256": "9ccc4e3f21fb2dd23ebd9844a83b92e074a66473b32deec465732222ac16ec74",
+      "size": 7546
+    },
+    {
+      "path": "docs/adr/ADR-001-modular-monolith.md",
+      "sha256": "d81e23d0a69afef9c6da8f562f28d7c3e3a1b24847d94cbd733340c3f417ba04",
+      "size": 804
+    },
+    {
+      "path": "docs/adr/ADR-002-postgresql.md",
+      "sha256": "ec2cdeb587f6f445ce485169f588c2703d47c33b2fcf67770249d2f5d8ce642b",
+      "size": 549
+    },
+    {
+      "path": "docs/adr/ADR-003-deterministic-quality-decisions.md",
+      "sha256": "1f4d3dc626296cd933a1003cb051145a428d6729586c18ec6b03da935c10e6f6",
+      "size": 489
+    },
+    {
+      "path": "docs/releases/v2.0.0.md",
+      "sha256": "a599e3f79a1881f09c246b46b88cd80aadb897dad692b9948bb62ccfaacd4a7e",
+      "size": 1092
+    },
+    {
+      "path": "docs/runbooks/local-development.md",
+      "sha256": "cdbe003f7046b98e9bf52ddcce2f07a7c9b782f0a8e74fa41fe6ea5cf756d725",
+      "size": 619
+    },
+    {
+      "path": "evaluation/ai_value/README.md",
+      "sha256": "19a17b07b627b8a244cbf501ea358e2aeb9269a8731837263ee833073ab33479",
+      "size": 1984
+    },
+    {
+      "path": "evaluation/ai_value/rca_cases.jsonl",
+      "sha256": "bf2e4953f9c9a81995a51697bd12a8847fa20805fc402080b4dba725ab916238",
+      "size": 11631
+    },
+    {
+      "path": "evaluation/ai_value/requirements.jsonl",
+      "sha256": "9dfe5d3e6204f833852c8afa375192e729308a5be78259039ddf0b2ad542f13f",
+      "size": 19457
+    },
+    {
+      "path": "evaluation/ai_value/test_generation_gold.jsonl",
+      "sha256": "f20f272f6bd172a7c54338f4739543b15f18f9c4db09bcc1f3d5c32dad620879",
+      "size": 337
+    },
+    {
+      "path": "evaluation/datasets/ai_baseline.json",
+      "sha256": "234cdb2ba3e33c2133c45274d4488d0ce16107724e87f0798a9ed63a36d3a15d",
+      "size": 392
+    },
+    {
+      "path": "landing/.gitignore",
+      "sha256": "9330ec0cf46e80c4e038be7c3abd363b518b902387f46c7f5842c46de5d28f9c",
+      "size": 491
+    },
+    {
+      "path": "landing/.openai/hosting.json",
+      "sha256": "aa8f6153dfbbd3c4d92ba40619582994e15ea0c72797e5404b72fd4d051e0647",
+      "size": 91
+    },
+    {
+      "path": "landing/README.md",
+      "sha256": "b937105a707284478b39b93b720c2ae1c7d250343bb9987bba36c0962f05383d",
+      "size": 1026
+    },
+    {
+      "path": "landing/app/globals.css",
+      "sha256": "dbc4ae4ab22a3686ba36bb7ce58fd8cf35cf9f9514c6c46d82d0a8820c764465",
+      "size": 14279
+    },
+    {
+      "path": "landing/app/layout.tsx",
+      "sha256": "93eae8baf1ff8b6083b22aabd56f1d332dd2c7c497d0a50286fa528f5d36946b",
+      "size": 1034
+    },
+    {
+      "path": "landing/app/page.tsx",
+      "sha256": "2f59a830f01586582fa682464207b5aaccf5df745f3dcbdbdc952138ba6922fa",
+      "size": 16213
+    },
+    {
+      "path": "landing/build/sites-vite-plugin.ts",
+      "sha256": "81b7cbfaeb970611572256aba0e313425beb3809f6426f63750696c15d9c756b",
+      "size": 1254
+    },
+    {
+      "path": "landing/eslint.config.mjs",
+      "sha256": "870f1adccecf3051cbcd9fd307cef51d7633cf510979c181a81f4b1797273493",
+      "size": 465
+    },
+    {
+      "path": "landing/next.config.ts",
+      "sha256": "614bce25b089c3f19b1e17a6346c74b858034040154c6621e7d35303004767cc",
+      "size": 133
+    },
+    {
+      "path": "landing/package.json",
+      "sha256": "f9559a20002e59e801f136254ff8bedeb010ddec92ebe001e5350871d5da0d71",
+      "size": 1160
+    },
+    {
+      "path": "landing/pnpm-lock.yaml",
+      "sha256": "cbe007eebb0a5f6a457ae85ce0566e490be2ca63082ea51dca5cf5a91a2aba40",
+      "size": 211356
+    },
+    {
+      "path": "landing/pnpm-workspace.yaml",
+      "sha256": "fb4cd1144091d2d15ef21d607c27abe15bc40a45e1b7828ae50e232eabde3e78",
+      "size": 81
+    },
+    {
+      "path": "landing/postcss.config.mjs",
+      "sha256": "dfac7ac2d86d326a0e5adb024e7943c181393ed17a5fcb8f0315b24c7da6ddde",
+      "size": 94
+    },
+    {
+      "path": "landing/public/evidence/AI_VALUE_EVIDENCE.md",
+      "sha256": "8394360691f4a42cc964a36622c0f4e7e8c2d9e5793e1e57ad86235cd3af55b6",
+      "size": 5601
+    },
+    {
+      "path": "landing/public/evidence/AUTOMOTIVE_ARCHITECTURE.md",
+      "sha256": "9ccc4e3f21fb2dd23ebd9844a83b92e074a66473b32deec465732222ac16ec74",
+      "size": 7546
+    },
+    {
+      "path": "landing/public/evidence/PROJECT_README.md",
+      "sha256": "1b7fb14478c51d1d1e048e16cd3bfcc018a8b199f015c1b4aae4e6b88a4ca671",
+      "size": 14122
+    },
+    {
+      "path": "landing/public/evidence/rca_report.json",
+      "sha256": "b9fa3c993382f99e79d8a83a34d380fccf32ee7c3239f8b5a3f8deb5f87f7c3c",
+      "size": 5068
+    },
+    {
+      "path": "landing/public/evidence/test_generation_report.json",
+      "sha256": "1400d1d313689e779049b881e1a6f59a464aacc9ddf4fb3796e99bd06c13e712",
+      "size": 8270
+    },
+    {
+      "path": "landing/public/favicon.svg",
+      "sha256": "e6d2e59b7b5bbb0342e0fb496dfc262decbfe4426bbb7b047aec8d467d1dc6f7",
+      "size": 712
+    },
+    {
+      "path": "landing/public/file.svg",
+      "sha256": "2b67812c325c199a02536cdbeea0c593a72f707d323b72ee3e08dbab06753bd4",
+      "size": 391
+    },
+    {
+      "path": "landing/public/globe.svg",
+      "sha256": "b614b9bf183925957661ac851498fe1d8029fd43a62fbfed86f9e2624a57e7cf",
+      "size": 1035
+    },
+    {
+      "path": "landing/public/og.png",
+      "sha256": "5d42baf99904538bd58f1ec7fa7025a99f40b1270bf0e78dc96d669916c3ee18",
+      "size": 1362300
+    },
+    {
+      "path": "landing/public/project-metrics.json",
+      "sha256": "19df8017321a4a5b14b8a154c439d3c61f36b45bf4a424a14ede45db8936709b",
+      "size": 1684
+    },
+    {
+      "path": "landing/public/screenshots/ai-value-gates.png",
+      "sha256": "cd46d88f5edd3f4fa9d51be64504062ae91941063f9faa7705b85aad1f50c653",
+      "size": 50357
+    },
+    {
+      "path": "landing/public/screenshots/case-retrieval.png",
+      "sha256": "fe04cb8a59ae63da1b070d33cad8069fd1944c2abcc612276d9d56f2c797917e",
+      "size": 35868
+    },
+    {
+      "path": "landing/public/screenshots/engineering-overview.png",
+      "sha256": "425c02eab822200e15b7bdd5c4a2987d6fb37c9c45cf519d2285dc81666ca7dd",
+      "size": 30333
+    },
+    {
+      "path": "landing/public/screenshots/test-runs.png",
+      "sha256": "588a9884597cdb0ee8b35aa27d45228605fb54ef6c5af301efe6d18cd3014101",
+      "size": 58246
+    },
+    {
+      "path": "landing/public/window.svg",
+      "sha256": "644768c4aaeb4767bce293344eeb0c125fb804a94d801440424072202d85e3a1",
+      "size": 385
+    },
+    {
+      "path": "landing/tests/rendered-html.test.mjs",
+      "sha256": "00c732dbd742aeef52b3042bddda49a20024e6f65dae33accf2dbe5be847600e",
+      "size": 2318
+    },
+    {
+      "path": "landing/tsconfig.json",
+      "sha256": "be18523b23b78b6e1a876ddd107d330f0168bddf09d751b57e0b5edce69c66f3",
+      "size": 666
+    },
+    {
+      "path": "landing/vite.config.ts",
+      "sha256": "f7c14b8a38546bb6a7ec93cba22f8e8f131da9fbfe8b39327422ed5bb98d4613",
+      "size": 1697
+    },
+    {
+      "path": "landing/worker/index.ts",
+      "sha256": "36ba57a8a9fecf0a94d4adb34ec799eb00b6e120cfc19b20e92581e7542a192c",
+      "size": 1713
+    },
+    {
+      "path": "migrations/env.py",
+      "sha256": "4a178a7294ceb391e73978ecdfaef99362ad1a3cd5a0a44e55ad9f6ab3078bba",
+      "size": 1247
+    },
+    {
+      "path": "migrations/script.py.mako",
+      "sha256": "692527e9c38f98e042d0427720da8653e06899b35069c370a93faa2139dea885",
+      "size": 439
+    },
+    {
+      "path": "migrations/versions/20261015_0001_initial_explicit_schema.py",
+      "sha256": "d91861113ecb3a92db638b39c661ca68a7d433623bd25852ce7f5eb3e9555a57",
+      "size": 25181
+    },
+    {
+      "path": "migrations/versions/20261016_0002_ai_value_evaluation.py",
+      "sha256": "273e7f88c9c3ee1acdec4002873772ca8e10dd58f41bdf08f028eb90d895ea4f",
+      "size": 3138
+    },
+    {
+      "path": "prompts/dq_rule_generation/v1.yaml",
+      "sha256": "b1972a3b5b6106d05108299ce690077d0501a6cdabddf2fd5b3fa1c00ab73add",
+      "size": 104
+    },
+    {
+      "path": "prompts/rca/v1.yaml",
+      "sha256": "e317bb8be529ba5804864a6fc17870c5b29a7dfa0082b05d44315e8cd5fc2373",
+      "size": 116
+    },
+    {
+      "path": "prompts/rca/v2.yaml",
+      "sha256": "ce3592da318487938855b77c5ce27e4ff7818c9ad45794c6ec7022b557b39aa4",
+      "size": 610
+    },
+    {
+      "path": "prompts/requirement_analysis/v1.yaml",
+      "sha256": "3646c4c660f86da0ea1db3de43311a7aa2fc62a3e5a6533f10981a15ffebdf9b",
+      "size": 156
+    },
+    {
+      "path": "prompts/test_generation/v1.yaml",
+      "sha256": "961e9917cb13cdc4c51bed250944f499a7b9196a4ded8c1ab909a7ded1dbd96c",
+      "size": 115
+    },
+    {
+      "path": "prompts/test_generation/v2.yaml",
+      "sha256": "09dea3914e05010c8b0015d8268cbcc2c0ccf0497508d30cb9fe6dde22f54db3",
+      "size": 401
+    },
+    {
+      "path": "pyproject.toml",
+      "sha256": "491c7634091c984f69861668f5e8497ec71d3faf2b722922460e5268872d0ede",
+      "size": 1223
+    },
+    {
+      "path": "requirements.txt",
+      "sha256": "c15427ad6838bc8c1563e7995aa1c6e64e61280d73a1ccf576e4697a32bcae89",
+      "size": 312
+    },
+    {
+      "path": "scripts/baselines/build_legacy_baseline.py",
+      "sha256": "a6954a2ca582b929316dab5c135082bee6753aee7463d831d216310c73774ad6",
+      "size": 600
+    },
+    {
+      "path": "scripts/export_landing_data.py",
+      "sha256": "8f779c944456f7bea18539d461315562396f7348d9382d089f5b718eff52d8f8",
+      "size": 2708
+    },
+    {
+      "path": "scripts/publish_ai_value_artifacts.py",
+      "sha256": "735a18daf16ac7b4cc0dc97d5744de93b04c13afe6f91bc9b5dcdc8146e9154f",
+      "size": 3829
+    },
+    {
+      "path": "scripts/run_ai_evaluation.py",
+      "sha256": "efc4afc982e35822a756d35f9cf94b5d365f01a4cf6fc7bd777df4ef156939f0",
+      "size": 801
+    },
+    {
+      "path": "scripts/run_ai_value_experiment.py",
+      "sha256": "1fdd700ff97b7e8e7e419f14c6393986bd57f3c95dbed2aab839047ed3fb0b9f",
+      "size": 19683
+    },
+    {
+      "path": "scripts/run_enterprise_platform.py",
+      "sha256": "f5f9657ba974c34afde1b000d00c5724e630132eec39bbdd95d33db49a8419cb",
+      "size": 1752
+    },
+    {
+      "path": "sql/marts/daily_work_order_metrics.sql",
+      "sha256": "7914e13605cad97f0221754ef917669adedf39f18971d1f108bac4fd7d57b8a8",
+      "size": 392
+    },
+    {
+      "path": "sql/marts/ota_issue_summary.sql",
+      "sha256": "ec1059a0c6dab7e4e9a7d5f8eaa387889f002f982b1df1d4b5d4fe66bf5de508",
+      "size": 340
+    },
+    {
+      "path": "sql/marts/team_performance.sql",
+      "sha256": "e73aa977206275c4d3957f0a7adabeb11d14b1fdba91675568cd1aa51cddbfab",
+      "size": 316
+    },
+    {
+      "path": "sql/validations/ota_compatibility.sql",
+      "sha256": "319b4f2f317c1ffc50c1037e0b4dc35577a20bea049741c1951eaae383b377ac",
+      "size": 277
+    },
+    {
+      "path": "sql/validations/referential_integrity.sql",
+      "sha256": "f4cd0dafd3d923316a2bdc59665c9579444f763da66a846c75e14bf95f464589",
+      "size": 199
+    },
+    {
+      "path": "sql/validations/source_target_reconciliation.sql",
+      "sha256": "954f1ee45cf24b232afa9b7bacb4c0f703b1f77ef8fa4098596b77a587953ddd",
+      "size": 306
+    },
+    {
+      "path": "src/automotive/__init__.py",
+      "sha256": "f4fe6128a7dea924fd33886471a923082be4cc99ea0f6be27b510769de898d9c",
+      "size": 88
+    },
+    {
+      "path": "src/automotive/ai.py",
+      "sha256": "1d44ddefc5479355132c568f9230220b1081772cb9bfa59fb71d2e955f56112c",
+      "size": 238
+    },
+    {
+      "path": "src/automotive/api.py",
+      "sha256": "442864274edc82da17cba7518e87f3bb51c851daeac7957a45ae66d715c92ff6",
+      "size": 1968
+    },
+    {
+      "path": "src/automotive/evaluation.py",
+      "sha256": "f017b899b22374a058fd31ca91fca334c804171212a47a911cb54978b5a7cc21",
+      "size": 1597
+    },
+    {
+      "path": "src/automotive/gates.py",
+      "sha256": "6317f63e9d8a67274a749b24e19c7730f400925e632d24ce4d420b9df7bddce8",
+      "size": 811
+    },
+    {
+      "path": "src/automotive/generator.py",
+      "sha256": "899518ef6e1916fe3ec9f97c259201e839d7c8b0dbb3adbd7d4055677c4c52ea",
+      "size": 314
+    },
+    {
+      "path": "src/automotive/ml.py",
+      "sha256": "2ac7d08b02612458db51f24c41b5a176c91abdf5c7614f87d24fa8ea8bd9acfa",
+      "size": 2280
+    },
+    {
+      "path": "src/automotive/models.py",
+      "sha256": "fab785791aed232cb9c899eb6425c1e1fc3916c0a60901bbc1f50ccbe9e079d5",
+      "size": 135
+    },
+    {
+      "path": "src/automotive/pipeline.py",
+      "sha256": "2132c0e9d0dc8f493c0b29fee964da364fb92b0825b84308a010873e4a442df4",
+      "size": 3544
+    },
+    {
+      "path": "src/automotive/processing.py",
+      "sha256": "00960f7b7cd0a1e8f570fa55940dc60be4bb93a77778609481bfeb840006eaea",
+      "size": 2633
+    },
+    {
+      "path": "src/automotive/quality.py",
+      "sha256": "045617fb03279ae40a8ac4d0e83d1b26aa6e9544ec24c15d4957a9f869975f3b",
+      "size": 2629
+    },
+    {
+      "path": "src/automotive/retrieval.py",
+      "sha256": "8ed91923c266e53cd867313e03bca2a900734462bb1c53a398b33830ea835654",
+      "size": 235
+    },
+    {
+      "path": "src/automotive_quality/__init__.py",
+      "sha256": "9503d5d9ab39181a75ccd008fa5d6d8424e80d20d0575aad5fff16c39387fbfd",
+      "size": 106
+    },
+    {
+      "path": "src/automotive_quality/api/__init__.py",
+      "sha256": "a91e4d34e36975aabce6abcac1f18192de70c395b448a9d0d98794c074e19f83",
+      "size": 42
+    },
+    {
+      "path": "src/automotive_quality/api/dependencies.py",
+      "sha256": "24ab0ed408046ef38a41aa551ce0ef40a99242e2297628bf96f75061a04ee4bd",
+      "size": 887
+    },
+    {
+      "path": "src/automotive_quality/api/main.py",
+      "sha256": "c3501df5763323644bc898720bc3052324b90986c1554849155f5581a28ebcea",
+      "size": 975
+    },
+    {
+      "path": "src/automotive_quality/api/v1.py",
+      "sha256": "9de2a58a9c1987b05fd1d2b8dcd99f33690c0f52ca23ccccbe99aea5e74937a1",
+      "size": 17091
+    },
+    {
+      "path": "src/automotive_quality/application/ai_testing_workflow.py",
+      "sha256": "1a3a85e2c817cb61e7a9f0e4329c42cb681260abecae7aa0fa4805028970dbb9",
+      "size": 16143
+    },
+    {
+      "path": "src/automotive_quality/application/runtime.py",
+      "sha256": "cccc15b2bd06261b83e43c86e094c14629f2fe42ad5fc1bcc32599ac83723c8b",
+      "size": 6416
+    },
+    {
+      "path": "src/automotive_quality/baselines/__init__.py",
+      "sha256": "d48aad6dbae2af7d8458a8f5f7fe59636eed5d9aabd150f0ce0c72b611d05310",
+      "size": 221
+    },
+    {
+      "path": "src/automotive_quality/baselines/deterministic_ai.py",
+      "sha256": "96cb2f1b45fef0bc920cc07b2e59181d3261fd4d5bf77926664af3e1e12a4062",
+      "size": 4109
+    },
+    {
+      "path": "src/automotive_quality/baselines/evidence_rca.py",
+      "sha256": "d15323e8c2d5fd373e751fd9f9c4ed8ff242806bdef466f50ca96024d3ed343c",
+      "size": 1838
+    },
+    {
+      "path": "src/automotive_quality/baselines/lexical_retrieval.py",
+      "sha256": "96c43a1d34031494f96c50d8651210e119e99fb90c3ef02af201f545504992c6",
+      "size": 3222
+    },
+    {
+      "path": "src/automotive_quality/baselines/schemas.py",
+      "sha256": "7f2a1b8bd0138d2ba3ddc3918619befb72e259e774ea462cbc00d4b5be2e6860",
+      "size": 1348
+    },
+    {
+      "path": "src/automotive_quality/baselines/template_test_generator.py",
+      "sha256": "884b9b02de356cdf6b8557cb939d8d997fca8a7f72b35fbd4835b52056bd90fd",
+      "size": 2010
+    },
+    {
+      "path": "src/automotive_quality/domains/__init__.py",
+      "sha256": "b39ed853bc6f2bde3cb81a35dbacba65b063cb9ebae92a23f646cce3d5a15bd8",
+      "size": 25
+    },
+    {
+      "path": "src/automotive_quality/domains/ai/__init__.py",
+      "sha256": "a5e75c0dbe99c0684b077ed0dd0757271d25d1afdecc5cced78a049f5e7969ac",
+      "size": 247
+    },
+    {
+      "path": "src/automotive_quality/domains/ai/evaluation.py",
+      "sha256": "35d5c8aded7d95a6726fe06f756525a0a743ff5e6d6e4d6df18a1802997021ae",
+      "size": 2091
+    },
+    {
+      "path": "src/automotive_quality/domains/ai/prompts.py",
+      "sha256": "e655bd33c2505331116883a73fbd1fefe4fa51fd03cc366bbbead096b1ff0e11",
+      "size": 878
+    },
+    {
+      "path": "src/automotive_quality/domains/ai/providers/__init__.py",
+      "sha256": "c5588ab16e41622e3d59f6a4e147ae2ae3f953cf607a79e05690314f0d0c5470",
+      "size": 158
+    },
+    {
+      "path": "src/automotive_quality/domains/ai/providers/base.py",
+      "sha256": "076e4c1ed1318088a7eb737c5e1094f6af2de130435921e180ab18169e75f0ca",
+      "size": 287
+    },
+    {
+      "path": "src/automotive_quality/domains/ai/providers/mock.py",
+      "sha256": "e0aca886ee2ccaf5b99bf0ab10f7be76406a92ca6dee1fb740906ed7acec9ca9",
+      "size": 730
+    },
+    {
+      "path": "src/automotive_quality/domains/ai/providers/openai.py",
+      "sha256": "61b2b51882aab36d7f711641d983d22c509d66e87b67c2583ff016ffc7ff9d6e",
+      "size": 2977
+    },
+    {
+      "path": "src/automotive_quality/domains/ai/schemas.py",
+      "sha256": "d5ad0fa5f35918ee559aa4bf7e64255ca865266126d17ae898901c2758e179de",
+      "size": 2560
+    },
+    {
+      "path": "src/automotive_quality/domains/ai/workflows.py",
+      "sha256": "d58160b30cb5a0e64de696ff600a6fe1182509cff7f5d2f2ef35a552b016c634",
+      "size": 3420
+    },
+    {
+      "path": "src/automotive_quality/domains/data_quality/__init__.py",
+      "sha256": "75f8bb6cfb061fadf29b33b6f1be35fa01632ae8526a6a3f1a19ed17d8e6f330",
+      "size": 160
+    },
+    {
+      "path": "src/automotive_quality/domains/data_quality/io.py",
+      "sha256": "34d0c28dcd31320f4d87ad99fa6eea7d1cc28f285abbb825038745b25f80372c",
+      "size": 237
+    },
+    {
+      "path": "src/automotive_quality/domains/data_quality/models.py",
+      "sha256": "7411f92811c02a44a97e2374caaedef9072290a2eeb5b46c726b180aa30faee5",
+      "size": 4235
+    },
+    {
+      "path": "src/automotive_quality/domains/data_quality/service.py",
+      "sha256": "9c0568de6d8827422b02ad362849395f6664dc9552a8a81e9e32bcf2fabc8beb",
+      "size": 5517
+    },
+    {
+      "path": "src/automotive_quality/domains/evaluation/__init__.py",
+      "sha256": "1806cee672d0b2d4ad98a5808c42753bbdceb91d5c33634784b4ac66f299d803",
+      "size": 128
+    },
+    {
+      "path": "src/automotive_quality/domains/evaluation/ai_value.py",
+      "sha256": "cc08b4189856ad128d510c3a06dc67778f54e3868227c6c34b7c90907dc56fc0",
+      "size": 7811
+    },
+    {
+      "path": "src/automotive_quality/domains/evaluation/policy.py",
+      "sha256": "04040397950b829ca6cd85d1df3f908cd0354a5f63164b079af89108fdcdf9dc",
+      "size": 1205
+    },
+    {
+      "path": "src/automotive_quality/domains/retrieval/__init__.py",
+      "sha256": "7594447a48ff4f37183df2b4adc416d72b70fc52b9874642ee7d9dd063c8382b",
+      "size": 91
+    },
+    {
+      "path": "src/automotive_quality/domains/retrieval/models.py",
+      "sha256": "75947f96ed84b661588675d3b0a3b754310bc38d0e261cc1e45a7e4994507ddd",
+      "size": 376
+    },
+    {
+      "path": "src/automotive_quality/domains/retrieval/service.py",
+      "sha256": "73852d3c0548f7e33cb87acca75ec762a6091ae8ce66e97bf94a588c4aa7aea9",
+      "size": 808
+    },
+    {
+      "path": "src/automotive_quality/domains/testing/__init__.py",
+      "sha256": "43f5f1966c7cbc966fd5c06d852768e855a6879b72975008c9dfac77652c94bc",
+      "size": 291
+    },
+    {
+      "path": "src/automotive_quality/domains/testing/models.py",
+      "sha256": "719a2dc490785d728981c86a677c5b0c72b39df4db969d942663815d0347a2dc",
+      "size": 1595
+    },
+    {
+      "path": "src/automotive_quality/domains/testing/service.py",
+      "sha256": "552fe51bdf43e1ac286810d862ba198efde44a58bb9b842cf1d4f7693d3f3bcb",
+      "size": 2323
+    },
+    {
+      "path": "src/automotive_quality/domains/work_orders/__init__.py",
+      "sha256": "c4f6e8075876c369596538cfb024efea81f4f8c599c23a0c7e379c2f2e626993",
+      "size": 340
+    },
+    {
+      "path": "src/automotive_quality/domains/work_orders/ingestion.py",
+      "sha256": "fce74c1b5cdd949f081b73b2b3486b7e3701aee44913a98565c8caaabd103d8c",
+      "size": 4990
+    },
+    {
+      "path": "src/automotive_quality/domains/work_orders/reconciliation.py",
+      "sha256": "0a2a5696b4d182fa7f4ec5db053da1fbde656155ebceff26c6dfbec4f62c0f5a",
+      "size": 1325
+    },
+    {
+      "path": "src/automotive_quality/infrastructure/__init__.py",
+      "sha256": "67e03f5ba72ec5613a2b4b75c065dba766e620908a88a91a6571f8e49f91bb5e",
+      "size": 32
+    },
+    {
+      "path": "src/automotive_quality/infrastructure/database/__init__.py",
+      "sha256": "f4c40884e596ffda1a916d0adb17b338076d168a12aeddd8914ecfbfb8c5482e",
+      "size": 122
+    },
+    {
+      "path": "src/automotive_quality/infrastructure/database/base.py",
+      "sha256": "aabc54eaacf780c265ec100eb22c1e3e7d32cf18467253feb4e6797d762d4bde",
+      "size": 84
+    },
+    {
+      "path": "src/automotive_quality/infrastructure/database/case_repository.py",
+      "sha256": "51735c0a4cbd50adaae654892c17555b1de2f3c3d6bc2cb2baeada683c41a0af",
+      "size": 1006
+    },
+    {
+      "path": "src/automotive_quality/infrastructure/database/models.py",
+      "sha256": "7a0348023547d19df079cf0cd4d94c5bc2ef414405815293aa9ab86a3fece54f",
+      "size": 16120
+    },
+    {
+      "path": "src/automotive_quality/infrastructure/database/repositories.py",
+      "sha256": "dcf713e4855d475ce350b1d4217ef8f952ad5ad3ff722530ca5abe600e2e76ea",
+      "size": 5204
+    },
+    {
+      "path": "src/automotive_quality/infrastructure/database/session.py",
+      "sha256": "b553151c05a7d137fee77214f62fd880534d7fbb89d71e627b891004ac5bec0f",
+      "size": 802
+    },
+    {
+      "path": "src/automotive_quality/infrastructure/database/sql_executor.py",
+      "sha256": "cfc0400a8eda056e54eca96326cb4ab5a370c38eaf735a646b853bd14242eac8",
+      "size": 1636
+    },
+    {
+      "path": "src/automotive_quality/infrastructure/sources/__init__.py",
+      "sha256": "d6b4c2889bdf2e8840898e11cd8d1aa207e53c5c49f03ed73cfd0c1bf36dc60f",
+      "size": 144
+    },
+    {
+      "path": "src/automotive_quality/infrastructure/sources/synthetic.py",
+      "sha256": "07c901da224bc272a9ce3aede6c92d699eef16f4f71cbf55007eceed3a4be2b9",
+      "size": 8002
+    },
+    {
+      "path": "src/automotive_quality/integrations/__init__.py",
+      "sha256": "5412ba266c172c88776b2fd706da1110acaf158993d43e4ed3078448c0c2f911",
+      "size": 108
+    },
+    {
+      "path": "src/automotive_quality/integrations/issue_tracker.py",
+      "sha256": "500af5a5c3fa4aede6ddf93e93d8e9eb1563654a76589d5a535fd93ae6474f2b",
+      "size": 2576
+    },
+    {
+      "path": "src/automotive_quality/integrations/jira/__init__.py",
+      "sha256": "c8c3cf6cacc8cbc9a16bf50729352c2921f66fe5632d0215d642a24210e783c2",
+      "size": 69
+    },
+    {
+      "path": "src/automotive_quality/integrations/jira/client.py",
+      "sha256": "6ae23c1a0397ef4157d1f2465f064a53eb028491520db9a84ee97d87510553b8",
+      "size": 4624
+    },
+    {
+      "path": "src/automotive_quality/shared/__init__.py",
+      "sha256": "e671044f96457f5500d82f2d1291f38d6652ca860859d138ecaa8b0087d1e02c",
+      "size": 62
+    },
+    {
+      "path": "src/automotive_quality/shared/config.py",
+      "sha256": "fd3fbfc6022bd2f4c986a320ece046226e87a4369a21a0914ce3ba71ade5b59a",
+      "size": 1070
+    },
+    {
+      "path": "src/automotive_quality/shared/logging.py",
+      "sha256": "4f4af9506008550f33b723ee11ab4162195256dbdebfbf5b99476ad4fbc044e9",
+      "size": 448
+    },
+    {
+      "path": "src/automotive_work_order_intelligence.egg-info/PKG-INFO",
+      "sha256": "129bb49d6c3a1e9a58822f16986b055f099372a619033b1cc6872d2e90abeca3",
+      "size": 901
+    },
+    {
+      "path": "src/automotive_work_order_intelligence.egg-info/SOURCES.txt",
+      "sha256": "b179aa160fc84211d3d4def8975ad28801ae75a7cbe0fdc86045cb9d8c07dcb6",
+      "size": 3919
+    },
+    {
+      "path": "src/automotive_work_order_intelligence.egg-info/dependency_links.txt",
+      "sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+      "size": 1
+    },
+    {
+      "path": "src/automotive_work_order_intelligence.egg-info/requires.txt",
+      "sha256": "aaedd031f758d826c97bd8c1f8bf8a1ca54747fc13796640b846831a08849c3c",
+      "size": 328
+    },
+    {
+      "path": "src/automotive_work_order_intelligence.egg-info/top_level.txt",
+      "sha256": "1850be5f1f92bb189e025f1dee6a8a36d35fad43df3e4cec1829321c2e67847d",
+      "size": 30
+    },
+    {
+      "path": "tests/architecture/test_runtime_boundaries.py",
+      "sha256": "151ea1778ff84f0fd481e4eef0354a3e1b34d28411b0ea6b0d882dea96054cdd",
+      "size": 1468
+    },
+    {
+      "path": "tests/conftest.py",
+      "sha256": "0c3a77a30aff7c22d6d84aee00131f4ffd74c26e48b097465cbd405d657892ab",
+      "size": 351
+    },
+    {
+      "path": "tests/integration/test_jira_live.py",
+      "sha256": "49f5345f721b0599638562938622c856fffbd449c4e02c517b85324a916c3bc9",
+      "size": 1765
+    },
+    {
+      "path": "tests/integration/test_postgres_runtime.py",
+      "sha256": "3e8a0cf763e84ea478bced066128f41d3b7b13891297262cd09a3e347d8529d6",
+      "size": 1162
+    },
+    {
+      "path": "tests/test_ai_evaluation.py",
+      "sha256": "4852245eb47ed39015b0502a4b86f1f54ea638e60974afb50fced681e21e0ec4",
+      "size": 456
+    },
+    {
+      "path": "tests/test_ai_value.py",
+      "sha256": "455664e31150cc987c390e2781dd9e382dc15f0c43062ccaf6d0aba5f73a515c",
+      "size": 4770
+    },
+    {
+      "path": "tests/test_ai_workflows.py",
+      "sha256": "440699b8e957f161bd89ddf7bacce22e826f4adae14e37d50b6ca842419d106f",
+      "size": 3303
+    },
+    {
+      "path": "tests/test_automotive_ai.py",
+      "sha256": "99b2c900d061eea364c6a75f0119c0ac1d16a9af64fc38092eb3ff373419daba",
+      "size": 2530
+    },
+    {
+      "path": "tests/test_automotive_api.py",
+      "sha256": "45cc154da0c2eb51981a071646d0ee6555e025a0aece379b2028ee39a7a6fa47",
+      "size": 528
+    },
+    {
+      "path": "tests/test_automotive_generator_quality.py",
+      "sha256": "f3fbf86cd5681f8f77bff7f18cc35cc4028128a8c1ae6f0e42663fa2e4554024",
+      "size": 1150
+    },
+    {
+      "path": "tests/test_database_schema.py",
+      "sha256": "5f0788e48585c650b81e85ac2479a7df584401c247de2fc32e563f3f71fd28ae",
+      "size": 2041
+    },
+    {
+      "path": "tests/test_enterprise_data_quality.py",
+      "sha256": "1918b6ff88f60f921143199e43208261b563705776a5549e9dbe02a42577cfb4",
+      "size": 3489
+    },
+    {
+      "path": "tests/test_jira_client.py",
+      "sha256": "cda0b9835ce9ecd03cef3168f7806790ccb7b9023429625354aa7a652a02f928",
+      "size": 1752
+    },
+    {
+      "path": "tests/test_landing_data.py",
+      "sha256": "a537b2d6032dce6f78825776c52bdad8f61d231fe03f44d83e9b50a71e3021ae",
+      "size": 985
+    },
+    {
+      "path": "tests/test_openai_provider.py",
+      "sha256": "1bc56b293f44d3f76b3d596e6835c5cf799c638c5a843cb753d73030659f1969",
+      "size": 5040
+    },
+    {
+      "path": "tests/test_persistent_repositories.py",
+      "sha256": "85c9659bce931700bb2444f47d186b723f6866517a4e688e30f272bae4402feb",
+      "size": 1418
+    },
+    {
+      "path": "tests/test_platform_runtime.py",
+      "sha256": "9a0c4a8e253fbcfdf9f87e9833d4733e78cd16b759e1f7ca79cafa0cc45708f5",
+      "size": 1882
+    },
+    {
+      "path": "tests/test_reconciliation_policy.py",
+      "sha256": "39df9cea457e5155d4466cc0e2ffc1d8505c9993ddff07147bbb36ba314ffecc",
+      "size": 1407
+    },
+    {
+      "path": "tests/test_run_ai_evaluation.py",
+      "sha256": "8e590baf5d270e33f3a551502647bb0cf70646a6ad9e3e6ebd0d95ee7d17c1dc",
+      "size": 871
+    },
+    {
+      "path": "tests/test_test_management.py",
+      "sha256": "db71a0f469f6cd5c387706dbd03d763d597e26eccda49344e03d0caea28c5313",
+      "size": 2267
+    },
+    {
+      "path": "tests/test_v1_api.py",
+      "sha256": "0156bdf0e6ba3f84e4e0659c29900d002b207db6caff1cb638d67110277d2695",
+      "size": 10277
+    }
+  ],
+  "package": "automotive-work-order-intelligence-chatgpt-package",
+  "sanitization": {
+    "credentials_and_environment_files_excluded": true,
+    "git_metadata_excluded": true,
+    "raw_experiment_results_excluded": true,
+    "reviewer_workbooks_and_individual_review_records_excluded": true,
+    "sanitized_ai_value_artifacts_included": true,
+    "virtual_environments_and_caches_excluded": true
+  },
+  "source_project": "automotive-work-order-intelligence"
+}

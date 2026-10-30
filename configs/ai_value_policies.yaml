@@ -1,0 +1,38 @@
+status: proposed_until_calibrated
+dataset_version: ai-value-v1
+experiments:
+  test-generation:
+    - metric: ai.schema_validity
+      operator: ">="
+      threshold: 1.0
+    - metric: ai.requirement_coverage
+      operator: ">="
+      threshold: 0.75
+    - metric: ai.negative_coverage
+      operator: ">="
+      threshold: 0.75
+    - metric: ai.executable_rate
+      operator: ">="
+      threshold: 0.90
+    - metric: ai.duplicate_rate
+      operator: "<="
+      threshold: 0.20
+    - metric: ai.unsupported_assumption_rate
+      operator: "<="
+      threshold: 0.05
+    - metric: ai.approval_rate
+      operator: ">="
+      threshold: 0.70
+  rca:
+    - metric: ai.evidence_support_rate
+      operator: ">="
+      threshold: 0.90
+    - metric: ai.unsupported_claim_rate
+      operator: "<="
+      threshold: 0.05
+    - metric: ai.correct_abstention
+      operator: ">="
+      threshold: 0.90
+    - metric: ai.root_cause_accuracy
+      operator: ">="
+      threshold: 0.70

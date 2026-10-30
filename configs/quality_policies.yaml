@@ -1,0 +1,22 @@
+policies:
+  - metric: data_quality.critical_failed_rules
+    operator: "<="
+    threshold: 0
+  - metric: ml.roc_auc
+    operator: ">="
+    threshold: 0.65
+  - metric: ml.f1
+    operator: ">="
+    threshold: 0.45
+  - metric: retrieval.hit_rate_at_5
+    operator: ">="
+    threshold: 0.70
+  - metric: retrieval.mrr
+    operator: ">="
+    threshold: 0.60
+  - metric: rag.citation_validity
+    operator: ">="
+    threshold: 1.0
+  - metric: rag.unsupported_claim_rate
+    operator: "<="
+    threshold: 0.0
