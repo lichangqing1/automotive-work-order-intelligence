@@ -23,5 +23,7 @@ def test_real_postgres_runtime_persists_all_run_types() -> None:
             dataset_version=version,
         )
         assert summary.reconciliation.passed
+        assert summary.sql_validations["source_target_reconciliation"]
+        assert summary.final_gate_passed
         assert session.scalar(select(func.count()).select_from(models.IngestionRun)) >= 1
         assert session.scalar(select(func.count()).select_from(models.DQRun)) >= 1
