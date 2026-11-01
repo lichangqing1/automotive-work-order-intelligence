@@ -215,6 +215,10 @@ See `evaluation/ai_value/README.md` and `docs/AI_VALUE_EVALUATION.md`. Do not qu
 
 ### Measured AI-value evidence
 
+- [Browser-friendly evidence hub](https://automotive-ai-quality-engineering.p154820.chatgpt.site/en/evidence)
+- [Chinese evidence hub](https://automotive-ai-quality-engineering.p154820.chatgpt.site/zh/evidence)
+- [Raw AI-value artifacts](artifacts/ai_value/README.md)
+
 The completed `ai-value-v1` test-generation and RCA experiments both used OpenAI with three runs, complete human review, and immutable rescoring; both reports are marked `publishable: true`. The sanitized evidence and reproducibility manifest are in [`artifacts/ai_value/`](artifacts/ai_value/README.md).
 
 Test generation increased mean requirement coverage from 5.83% to 49.35% and mean negative coverage from 20.00% to 47.96%. Measured human-effort saving was 48.98%, and end-to-end saving was 19.00%. However, the AI unsupported-assumption rate was 100%, and the proposed test-generation policy returned `BLOCK`.

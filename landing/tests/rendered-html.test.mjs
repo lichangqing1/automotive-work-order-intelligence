@@ -88,6 +88,8 @@ test("renders stable English and Chinese routes from one evidence source", async
 
   const english = await englishResponse.text();
   const chinese = await chineseResponse.text();
+  assert.match(english, /<html[^>]*lang="en"/i);
+  assert.match(chinese, /<html[^>]*lang="zh-CN"/i);
   assert.match(english, /Measured AI Value/i);
   assert.match(chinese, /量化 AI 价值/);
   assert.match(chinese, /AI 不直接决定测试通过或失败/);
@@ -100,4 +102,11 @@ test("renders stable English and Chinese routes from one evidence source", async
     assert.match(english, pattern);
     assert.match(chinese, pattern);
   }
+});
+
+test("declares the correct document language on bilingual evidence routes", async () => {
+  const english = await (await render("/en/evidence")).text();
+  const chinese = await (await render("/zh/evidence")).text();
+  assert.match(english, /<html[^>]*lang="en"/i);
+  assert.match(chinese, /<html[^>]*lang="zh-CN"/i);
 });

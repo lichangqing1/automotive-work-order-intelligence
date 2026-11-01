@@ -6,7 +6,7 @@
 
 🌐 **在线演示：** [简体中文](https://automotive-ai-quality-engineering.p154820.chatgpt.site/zh) · [English](https://automotive-ai-quality-engineering.p154820.chatgpt.site/) · [GitHub 源码](https://github.com/lichangqing1/automotive-work-order-intelligence)
 
-> 本项目构建了一个面向汽车售后、OTA 与诊断工单场景的生产化质量工程平台，将数据质量验证、自动化测试、AI 辅助测试生成、根因分析（Root Cause Analysis, RCA）、Jira 人工审核以及可量化的 AI 评估整合到同一条可追溯流程中。
+> 本项目构建了一个面向汽车售后、OTA 与诊断工单真实工程流程设计的质量工程平台，将数据质量验证、自动化测试、AI 辅助测试生成、根因分析（Root Cause Analysis, RCA）、Jira 人工审核以及可量化的 AI 评估整合到同一条可追溯流程中。
 
 > 实验结果表明，AI 相比确定性基线提高了多个测试覆盖指标并减少了人工投入，但未超过纯人工测试设计的需求覆盖率，同时仍存在无依据假设和 RCA 准确率问题。因此，当前测试生成和 RCA 两项 AI 质量策略均保持 `BLOCK`（未通过质量门禁）。
 
@@ -166,10 +166,12 @@ docker compose up --build
 
 ## 实验与证据
 
+- [在线中文评估证据](https://automotive-ai-quality-engineering.p154820.chatgpt.site/zh/evidence)
+- [Online Evaluation Evidence](https://automotive-ai-quality-engineering.p154820.chatgpt.site/en/evidence)
 - [完整英文技术 README](README.md)
 - [在线英文项目网站](https://automotive-ai-quality-engineering.p154820.chatgpt.site/en)
 - [在线中文项目网站](https://automotive-ai-quality-engineering.p154820.chatgpt.site/zh)
-- [AI 价值证据](artifacts/ai_value/README.md)
+- [AI 价值原始证据](artifacts/ai_value/README.md)
 - [AI 价值评估方法](docs/AI_VALUE_EVALUATION.md)
 - [系统架构](docs/AUTOMOTIVE_ARCHITECTURE.md)
 - [v2.0.0 发布说明](docs/releases/v2.0.0.md)

@@ -18,5 +18,11 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <html lang="en"><body>{children}</body></html>;
+  return <LocalizedDocument>{children}</LocalizedDocument>;
+}
+
+async function LocalizedDocument({ children }: Readonly<{ children: React.ReactNode }>) {
+  const requestHeaders = await headers();
+  const language = requestHeaders.get("x-page-language") === "zh-CN" ? "zh-CN" : "en";
+  return <html lang={language}><body>{children}</body></html>;
 }
