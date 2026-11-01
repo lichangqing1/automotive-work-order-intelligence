@@ -33,16 +33,44 @@ test("server-renders the recruiter evidence page", async () => {
 
 test("links to real evidence and avoids inflated claims", async () => {
   const page = await readFile(new URL("../app/LandingPage.tsx", import.meta.url), "utf8");
+  const evidencePage = await readFile(new URL("../app/EvidencePage.tsx", import.meta.url), "utf8");
   const requiredEvidence = [
     "/evidence/AI_VALUE_EVIDENCE.md",
     "/evidence/test_generation_report.json",
     "/evidence/rca_report.json",
     "/evidence/AUTOMOTIVE_ARCHITECTURE.md",
   ];
-  for (const href of requiredEvidence) assert.match(page, new RegExp(href.replaceAll("/", "\\/")));
+  for (const href of requiredEvidence) assert.match(evidencePage, new RegExp(href.replaceAll("/", "\\/")));
+  assert.match(page, /evidencePath/);
+  assert.match(page, /#project-guide/);
+  assert.match(page, /#ai-value/);
+  assert.doesNotMatch(page, /href="\/evidence\/[^"]+\.(md|json)"/i);
   assert.match(page, /\/screenshots\/ai-value-gates\.png/);
   assert.doesNotMatch(page, /100% accuracy|enterprise-grade|approved for autonomous/i);
   assert.doesNotMatch(page, /SkeletonPreview|react-loading-skeleton|codex-preview/);
+});
+
+test("renders readable bilingual evidence hubs with navigation and source artifacts", async () => {
+  const englishResponse = await render("/en/evidence");
+  const chineseResponse = await render("/zh/evidence");
+  assert.equal(englishResponse.status, 200);
+  assert.equal(chineseResponse.status, 200);
+
+  const english = await englishResponse.text();
+  const chinese = await chineseResponse.text();
+  assert.match(english, /Evidence, made/);
+  assert.match(english, /On this page/);
+  assert.match(english, /Publication-complete does not mean production-approved/);
+  assert.match(english, /Need the machine-readable evidence/);
+  assert.match(chinese, /让证据更易于/);
+  assert.match(chinese, /本页目录/);
+  assert.match(chinese, /证据完整，不等于可自主上线/);
+  assert.match(chinese, /需要查看机器可读证据/);
+  assert.match(chinese, /href="\/en\/evidence"/);
+  for (const anchor of ["project-guide", "ai-value", "test-generation", "rca", "architecture", "reproducibility", "source-artifacts"]){
+    assert.match(english, new RegExp(`id="${anchor}"`));
+    assert.match(chinese, new RegExp(`id="${anchor}"`));
+  }
 });
 
 test("supports a configured public repository without hard-coding a stale URL", async () => {
