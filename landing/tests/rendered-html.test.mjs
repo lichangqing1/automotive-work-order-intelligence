@@ -63,7 +63,7 @@ test("renders stable English and Chinese routes from one evidence source", async
   assert.match(english, /Measured AI Value/i);
   assert.match(chinese, /量化 AI 价值/);
   assert.match(chinese, /AI 不直接决定测试通过或失败/);
-  assert.match(chinese, /BLOCK[\s\S]*?阻断/);
+  assert.match(chinese, /BLOCK[\s\S]*?未通过质量门禁/);
   assert.match(english, /href="\/zh"/);
   assert.match(chinese, /href="\/en"/);
 

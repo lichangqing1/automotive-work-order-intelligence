@@ -67,13 +67,13 @@ export default function LandingPage({ language = "en" }: { language?: "en" | "zh
         <div className="hero-copy">
           <p className="eyebrow">{tr("PORTFOLIO CASE STUDY · QA / TEST DEVELOPMENT", "作品集案例 · QA / 测试开发")}</p>
           <h1>{tr("Automotive Work Order", "汽车工单")}<br/><em>{tr("AI Quality Engineering", "AI 质量工程")}</em> {tr("Platform", "平台")}</h1>
-          <p className="lede">{tr("A production-shaped QA platform combining automotive data-quality validation, deterministic test automation, AI-assisted test design and RCA, Jira-based human review, and measured AI quality evaluation.", "一个面向汽车工单场景的生产化 QA 平台，结合数据质量验证、确定性自动化测试、AI 辅助测试设计与根因分析（RCA）、Jira 人工审核流程，以及可量化的 AI 质量评估。")}</p>
+          <p className="lede">{tr("A production-shaped QA platform combining automotive data-quality validation, deterministic test automation, AI-assisted test design and RCA, Jira-based human review, and measured AI quality evaluation.", "融合数据质量验证、自动化测试、AI 辅助测试生成与 RCA、Jira 人工审核以及可量化 AI 评估的汽车质量工程平台。")}</p>
           <div className="actions">
             {githubUrl && <a className="button primary" href={githubUrl} target="_blank" rel="noreferrer">{tr("View source on GitHub", "查看 GitHub 源码")} <span>↗</span></a>}
             <a className="button primary" href="/evidence/AI_VALUE_EVIDENCE.md" target="_blank" rel="noreferrer">{tr("View evaluation evidence", "查看 AI 评估证据")} <span>↗</span></a>
             <a className="button secondary" href="#architecture">{tr("Explore architecture", "查看系统架构")}</a>
           </div>
-          <p className="hero-note"><span className="pulse"/> {tr("AI proposes. Deterministic controls and people decide.", "AI 提供辅助建议，最终决策仍由确定性规则与人工审核完成。")}</p>
+          <p className="hero-note"><span className="pulse"/> {tr("AI proposes. Deterministic controls and people decide.", "AI 提供辅助建议，确定性规则与人工审核负责最终决策。")}</p>
         </div>
         <div className="hero-panel" aria-label={tr("Project headline metrics", "项目核心指标")}>
           <div className="panel-label"><span>{tr("CONTROLLED BENCHMARK", "受控基准")}</span><span>v2.0.0</span></div>
@@ -126,7 +126,7 @@ export default function LandingPage({ language = "en" }: { language?: "en" | "zh
         <header className="section-heading"><p className="section-index">06 / {tr("MEASURED AI VALUE", "量化 AI 价值")}</p><h2>{tr("Measured gains.", "量化收益，")}<br/>{tr("Measured regressions.", "也量化风险。")}</h2><p>{tr("Three real-provider runs per experiment, complete human review, versioned inputs, and policy-based release gates.", "每项实验包含三轮真实模型运行、完整人工审核、版本化输入，以及基于策略的发布门禁。")}</p></header>
         <div className="evidence-grid">
           <article className="evidence-card">
-            <div className="evidence-title"><span>{tr("TEST GENERATION", "测试生成（Test Generation）")}</span><b className="status blocked">BLOCK<span>{zh ? " · 阻断" : ""}</span></b></div>
+            <div className="evidence-title"><span>{tr("TEST GENERATION", "测试生成（Test Generation）")}</span><b className="status blocked">BLOCK<span>{zh ? " · 未通过质量门禁" : ""}</span></b></div>
             <h3>{tr("AI improved the baseline—not human-only quality.", "AI 优于确定性基线，但未超过纯人工设计质量。")}</h3>
             <div className="metric-table"><div className="table-head"><span>{tr("Metric", "指标")}</span><span>{tr("Deterministic", "确定性基线")}</span><span>{tr("AI-assisted", "AI 辅助")}</span></div>{metrics.testGeneration.coverage.map(row => <div className="table-row" key={row.label}><span>{metricLabel(row.label)}</span><span>{pct(row.baseline)}</span><strong>{pct(row.ai)}</strong></div>)}</div>
             <div className="callout-row"><div className="positive"><span>{tr("Human effort saved", "人工投入减少")}</span><strong>{pct(metrics.testGeneration.humanEffortSaving)}</strong></div><div className="warning"><span>{tr("AI rejection rate", "AI 用例拒绝率")}</span><strong>{pct(metrics.testGeneration.rejectionRate)}</strong></div></div>
@@ -134,7 +134,7 @@ export default function LandingPage({ language = "en" }: { language?: "en" | "zh
           </article>
 
           <article className="evidence-card rca-card">
-            <div className="evidence-title"><span>{tr("ROOT-CAUSE ANALYSIS", "根因分析（RCA）")}</span><b className="status blocked">BLOCK<span>{zh ? " · 阻断" : ""}</span></b></div>
+            <div className="evidence-title"><span>{tr("ROOT-CAUSE ANALYSIS", "根因分析（RCA）")}</span><b className="status blocked">BLOCK<span>{zh ? " · 未通过质量门禁" : ""}</span></b></div>
             <h3>{tr("Faster investigation—not autonomous diagnosis.", "调查更高效，但不能自动诊断。")}</h3>
             <div className="time-shift"><div><span>{tr("Deterministic", "确定性基线")}</span><strong>{metrics.rca.baselineSeconds.toFixed(2)} s</strong></div><b>→</b><div><span>{tr("AI-assisted", "AI 辅助")}</span><strong>{metrics.rca.aiSeconds.toFixed(2)} s</strong></div></div>
             <div className="rca-metrics"><div><span>{tr("Recommended-check usefulness", "建议检查项有效性")}</span><strong>{pct(metrics.rca.checkUsefulness)}</strong><i className="good-bar" style={{"--value": `${metrics.rca.checkUsefulness * 100}%`} as React.CSSProperties}/></div><div><span>{tr("Evidence support", "证据支持率")}</span><strong>{pct(metrics.rca.evidenceSupport)}</strong><i className="good-bar" style={{"--value": `${metrics.rca.evidenceSupport * 100}%`} as React.CSSProperties}/></div><div className="failed-metric"><span>{tr("Root-cause accuracy", "根因准确率")}</span><strong>{pct(metrics.rca.rootCauseAccuracy)} — {tr("failed threshold", "未达阈值")}</strong><i className="bad-bar"/><small>{tr("Quality regression", "质量退化")}</small></div><div className="failed-metric"><span>{tr("Failure-class accuracy", "故障分类准确率")}</span><strong>{pct(metrics.rca.failureClassAccuracy)} — {tr("failed threshold", "未达阈值")}</strong><i className="bad-bar"/><small>{tr("Quality regression", "质量退化")}</small></div></div>
@@ -145,7 +145,7 @@ export default function LandingPage({ language = "en" }: { language?: "en" | "zh
 
       <section className="section gates">
         <div className="gate-intro"><p className="section-index">07 / {tr("QUALITY GATES", "质量门禁（Quality Gate）")}</p><h2>{tr("The system knows", "系统知道")}<br/>{tr("when to say no.", "何时必须拒绝。")}</h2><p>{tr("Both configurations produced measurable benefits, but failed predefined thresholds. The platform blocks autonomous promotion rather than averaging failures away.", "两种配置都带来了可量化收益，但未通过预设阈值。平台会阻断自主上线，而不是用平均值掩盖失败指标。")}</p></div>
-        <div className="gate-cards"><article><span>{tr("TEST GENERATION", "测试生成")}</span><strong>BLOCK{zh ? " · 阻断" : ""}</strong><p>{tr("Coverage, unsupported assumptions, and approval thresholds failed.", "覆盖率、无依据假设和审批率未达到门禁要求。")}</p></article><article><span>{tr("ROOT-CAUSE ANALYSIS", "根因分析")}</span><strong>BLOCK{zh ? " · 阻断" : ""}</strong><p>{tr("Accuracy, abstention, and unsupported-claim thresholds failed.", "准确率、正确拒答率和无依据结论指标未达到门禁要求。")}</p></article></div>
+        <div className="gate-cards"><article><span>{tr("TEST GENERATION", "测试生成")}</span><strong>BLOCK{zh ? " · 未通过质量门禁" : ""}</strong><p>{tr("Coverage, unsupported assumptions, and approval thresholds failed.", "覆盖率、无依据假设和审批率未达到门禁要求。")}</p></article><article><span>{tr("ROOT-CAUSE ANALYSIS", "根因分析")}</span><strong>BLOCK{zh ? " · 未通过质量门禁" : ""}</strong><p>{tr("Accuracy, abstention, and unsupported-claim thresholds failed.", "准确率、正确拒答率和无依据结论指标未达到门禁要求。")}</p></article></div>
       </section>
 
       <section className="section contribution" id="contribution">
