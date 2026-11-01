@@ -4,7 +4,7 @@
 
 > AI improved coverage over the deterministic baseline and reduced human effort, but it did not outperform human-only coverage and introduced unsupported assumptions. RCA reduced investigation time but failed accuracy thresholds. Both AI quality policies therefore correctly `BLOCK` the current configuration.
 
-**Live recruiter overview:** [English](https://automotive-ai-quality-engineering.dearmole20.chatgpt.site/en) · [中文](https://automotive-ai-quality-engineering.dearmole20.chatgpt.site/zh) · [Source repository](https://github.com/lichangqing1/automotive-work-order-intelligence)
+**Live recruiter overview:** [English](https://automotive-ai-quality-engineering.p154820.chatgpt.site/en) · [中文](https://automotive-ai-quality-engineering.p154820.chatgpt.site/zh) · [Source repository](https://github.com/lichangqing1/automotive-work-order-intelligence)
 
 The bilingual, evidence-first landing page is implemented under [`landing/`](landing/README.md). English is the default, with stable `/en` and `/zh` routes sharing the same generated metrics and evidence. The Streamlit dashboard remains the separate engineering console.
 

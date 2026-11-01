@@ -4,8 +4,8 @@ This site is the 60-second, evidence-first introduction to the Automotive Work O
 
 **Live site:**
 
-- English (default): https://automotive-ai-quality-engineering.dearmole20.chatgpt.site/en
-- 中文: https://automotive-ai-quality-engineering.dearmole20.chatgpt.site/zh
+- English (default): https://automotive-ai-quality-engineering.p154820.chatgpt.site/en
+- 中文: https://automotive-ai-quality-engineering.p154820.chatgpt.site/zh
 
 Metrics are generated from the sanitized reports under `artifacts/ai_value/`:
 
