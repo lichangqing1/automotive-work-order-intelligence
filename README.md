@@ -2,7 +2,7 @@
 
 English | [简体中文](README.zh-CN.md)
 
-🌐 **Live demo:** [English](https://automotive-ai-quality-engineering.p154820.chatgpt.site/) · [简体中文](https://automotive-ai-quality-engineering.p154820.chatgpt.site/zh)
+🌐 **Interactive prototype:** [English](https://automotive-ai-quality-engineering.p154820.chatgpt.site/) · [简体中文](https://automotive-ai-quality-engineering.p154820.chatgpt.site/zh)
 
 **Release:** [`v2.0.0 — Measured AI Quality Platform`](docs/releases/v2.0.0.md)
 
