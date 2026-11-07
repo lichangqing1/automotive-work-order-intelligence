@@ -14,24 +14,25 @@ async function render(path = "/") {
   );
 }
 
-test("server-renders the recruiter evidence page", async () => {
+test("server-renders the functional prototype overview", async () => {
   const response = await render();
   assert.equal(response.status, 200);
   assert.match(response.headers.get("content-type") ?? "", /^text\/html\b/i);
 
   const html = await response.text();
-  assert.match(html, /<title>Automotive AI Quality Engineering Platform<\/title>/i);
+  assert.match(html, /<title>AI-Assisted Testing Platform — Interactive Prototype<\/title>/i);
   assert.match(html, /Automotive Work Order/);
-  assert.match(html, /AI Quality Engineering/);
+  assert.match(html, /Data Quality &amp; AI-Assisted/);
+  assert.match(html, /Start interactive demo/i);
+  assert.match(html, /DEMO MODE/);
   assert.match(html, /30,000/);
   assert.match(html, /1,200/);
-  assert.match(html, /Measured AI Value/i);
-  assert.match(html, /Human effort saved/i);
+  assert.match(html, /Human-effort reduction/i);
   assert.match(html, />BLOCK</);
   assert.match(html, /AI never decides test PASS \/ FAIL/i);
 });
 
-test("links to real evidence and avoids inflated claims", async () => {
+test("keeps evidence links and avoids inflated claims", async () => {
   const page = await readFile(new URL("../app/LandingPage.tsx", import.meta.url), "utf8");
   const evidencePage = await readFile(new URL("../app/EvidencePage.tsx", import.meta.url), "utf8");
   const requiredEvidence = [
@@ -41,11 +42,9 @@ test("links to real evidence and avoids inflated claims", async () => {
     "/evidence/AUTOMOTIVE_ARCHITECTURE.md",
   ];
   for (const href of requiredEvidence) assert.match(evidencePage, new RegExp(href.replaceAll("/", "\\/")));
-  assert.match(page, /evidencePath/);
-  assert.match(page, /#project-guide/);
-  assert.match(page, /#ai-value/);
+  assert.match(page, /View measured evidence/);
+  assert.match(page, /\/en\/evidence/);
   assert.doesNotMatch(page, /href="\/evidence\/[^"]+\.(md|json)"/i);
-  assert.match(page, /\/screenshots\/ai-value-gates\.png/);
   assert.doesNotMatch(page, /100% accuracy|enterprise-grade|approved for autonomous/i);
   assert.doesNotMatch(page, /SkeletonPreview|react-loading-skeleton|codex-preview/);
 });
@@ -76,7 +75,7 @@ test("renders readable bilingual evidence hubs with navigation and source artifa
 test("supports a configured public repository without hard-coding a stale URL", async () => {
   const page = await readFile(new URL("../app/LandingPage.tsx", import.meta.url), "utf8");
   assert.match(page, /NEXT_PUBLIC_GITHUB_URL/);
-  assert.match(page, /View source on GitHub/);
+  assert.match(page, /GitHub/);
   assert.doesNotMatch(page, /github\.com\/your-account/);
 });
 
@@ -90,18 +89,29 @@ test("renders stable English and Chinese routes from one evidence source", async
   const chinese = await chineseResponse.text();
   assert.match(english, /<html[^>]*lang="en"/i);
   assert.match(chinese, /<html[^>]*lang="zh-CN"/i);
-  assert.match(english, /Measured AI Value/i);
-  assert.match(chinese, /量化 AI 价值/);
+  assert.match(english, /FUNCTIONAL PROTOTYPE/i);
+  assert.match(chinese, /功能原型/);
   assert.match(chinese, /AI 不直接决定测试通过或失败/);
-  assert.match(chinese, /BLOCK[\s\S]*?未通过质量门禁/);
+  assert.match(chinese, /BLOCK[\s\S]*?当前 AI 质量门禁/);
   assert.match(english, /href="\/zh"/);
   assert.match(chinese, /href="\/en"/);
 
-  for (const value of ["30,000", "1,200", "48.98%", "60.42%", "75.56%", "94.52%"]){
+  for (const value of ["30,000", "1,200", "48.98%"]){
     const pattern = new RegExp(value.replace(".", "\\."));
     assert.match(english, pattern);
     assert.match(chinese, pattern);
   }
+});
+
+test("implements the complete governed demo workflow", async () => {
+  const page = await readFile(new URL("../app/LandingPage.tsx", import.meta.url), "utf8");
+  for (const feature of [
+    "Run DQ validation", "Generate test cases", "Human Review", "Approve",
+    "Run test", "Generate AI RCA", "CURRENT RELEASE DECISION", "LIVE TRACE",
+  ]) assert.match(page, new RegExp(feature, "i"));
+  assert.match(page, /AIRUN-017-03/);
+  assert.match(page, /RESULT-842/);
+  assert.match(page, /AI never decides test PASS \/ FAIL/);
 });
 
 test("declares the correct document language on bilingual evidence routes", async () => {

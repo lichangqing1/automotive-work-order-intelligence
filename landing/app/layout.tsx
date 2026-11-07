@@ -7,8 +7,8 @@ export async function generateMetadata(): Promise<Metadata> {
   const host = requestHeaders.get("host") ?? "localhost:3000";
   const protocol = host.startsWith("localhost") ? "http" : "https";
   const image = `${protocol}://${host}/og.png`;
-  const title = "Automotive AI Quality Engineering Platform";
-  const description = "A measured, human-reviewed automotive QA platform with deterministic execution, Jira traceability, and explicit AI quality gates.";
+  const title = "AI-Assisted Testing Platform — Interactive Prototype";
+  const description = "A functional, reproducible demo of data-quality validation, AI-assisted testing, human review, deterministic execution, RCA, and quality gates.";
   return {
     title, description,
     icons: { icon: "/favicon.svg", shortcut: "/favicon.svg" },

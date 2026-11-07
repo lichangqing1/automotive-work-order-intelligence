@@ -1,175 +1,78 @@
-import Image from "next/image";
+"use client";
 
-import metrics from "../public/project-metrics.json";
+import { useMemo, useState } from "react";
+type Lang = "en" | "zh";
+type View = "overview" | "dq" | "generation" | "review" | "execution" | "evaluation";
+type Decision = "pending" | "approved" | "rejected";
+const github = process.env.NEXT_PUBLIC_GITHUB_URL ?? "https://github.com/lichangqing1/automotive-work-order-intelligence";
 
-const githubUrl = process.env.NEXT_PUBLIC_GITHUB_URL ?? "https://github.com/lichangqing1/automotive-work-order-intelligence";
-
-const capabilitiesEn = [
-  { tag: "01", title: "Data quality", items: ["Configurable DQ rules", "Cross-table validation", "Source–target reconciliation", "Controlled defect injection", "Dataset versioning"] },
-  { tag: "02", title: "Test engineering", items: ["Requirement-driven tests", "Persistent test versions", "Deterministic execution", "Result evidence", "Automated regression"] },
-  { tag: "03", title: "AI for testing", items: ["Requirement analysis", "Test generation", "RCA assistance", "Prompt/model audit trail", "Human approval"] },
-  { tag: "04", title: "Platform workflow", items: ["PostgreSQL + Alembic", "FastAPI services", "Jira integration", "CI and testing", "End-to-end traceability"] },
+const RULES = [
+  ["order_id_not_null", "Completeness", "PASS", "0"],
+  ["completion_after_creation", "Temporal", "FAIL", "84"],
+  ["vehicle_reference_valid", "Cross-table", "FAIL", "121"],
+  ["amount_positive", "Business rule", "FAIL", "43"],
+];
+const ROWS = [
+  ["WO-10482", "VEH-8821", "2026-10-12 11:20", "2026-10-12 10:45"],
+  ["WO-11807", "VEH-2914", "2026-10-13 09:14", "2026-10-13 08:59"],
+  ["WO-12139", "VEH-5520", "2026-10-14 16:32", "2026-10-14 16:04"],
+];
+const CASES = [
+  ["TC-017-01", "Valid completed order", "有效的已完成工单", "Order closes and all temporal/reference assertions pass."],
+  ["TC-017-02", "Missing vehicle reference", "缺少车辆引用", "Validation rejects the payload with VEHICLE_REQUIRED."],
+  ["TC-017-03", "Completion precedes creation", "完成时间早于创建时间", "Deterministic assertion fails: completion_time must be later than creation_time."],
+  ["TC-017-04", "Null completion timestamp", "完成时间为空", "Validation rejects closure with COMPLETION_TIME_REQUIRED."],
+];
+const NAV: Array<[View,string,string]> = [
+  ["overview","Overview","概览"], ["dq","Data Quality","数据质量"], ["generation","Test Generation","测试生成"],
+  ["review","Human Review","人工审核"], ["execution","Execution & RCA","执行与 RCA"], ["evaluation","Evaluation","评估"],
 ];
 
-const capabilitiesZh = [
-  { tag: "01", title: "数据质量", items: ["可配置 DQ 规则", "跨表验证", "源端与目标端对账", "受控缺陷注入", "数据集版本管理"] },
-  { tag: "02", title: "测试工程", items: ["需求驱动测试", "持久化测试版本", "确定性执行", "结果证据", "自动化回归"] },
-  { tag: "03", title: "AI 辅助测试", items: ["需求分析", "测试生成", "RCA 辅助", "提示词与模型审计链", "人工审批"] },
-  { tag: "04", title: "平台流程", items: ["PostgreSQL + Alembic", "FastAPI 服务", "Jira 集成", "CI 与测试", "端到端可追溯性"] },
-];
-
-const architectureEn = [
-  ["Jira", "Requirement"], ["Versioned", "Requirement"], ["AI-assisted", "Test design"],
-  ["Human", "Review"], ["Deterministic", "Execution"], ["Evidence-rich", "Test result"],
-  ["AI-assisted", "RCA"], ["Jira", "Defect"], ["Policy", "Quality gates"],
-];
-
-const architectureZh = [
-  ["Jira", "需求"], ["版本化", "需求"], ["AI 辅助", "测试设计"],
-  ["人工", "审核"], ["确定性", "执行"], ["证据化", "测试结果"],
-  ["AI 辅助", "RCA"], ["Jira", "缺陷"], ["策略", "质量门禁"],
-];
-
-const workflowEn = ["Jira requirement", "AI analysis", "Test generation", "Schema validation", "Human review", "Approved test", "Deterministic run", "RCA + Jira evidence"];
-const workflowZh = ["Jira 需求", "AI 分析", "测试生成", "结构验证", "人工审核", "审批后的测试", "确定性执行", "RCA + Jira 证据"];
-
-function pct(value: number) {
-  return `${(value * 100).toFixed(2)}%`;
-}
-
-export default function LandingPage({ language = "en" }: { language?: "en" | "zh" }) {
+export default function LandingPage({ language="en" }: { language?: Lang }) {
   const zh = language === "zh";
-  const evidencePath = zh ? "/zh/evidence" : "/en/evidence";
-  const tr = (english: string, chinese: string) => zh ? chinese : english;
-  const capabilities = zh ? capabilitiesZh : capabilitiesEn;
-  const architecture = zh ? architectureZh : architectureEn;
-  const workflow = zh ? workflowZh : workflowEn;
-  const metricLabel = (label: string) => zh ? ({
-    "Requirement coverage": "需求覆盖率", "Negative coverage": "负向场景覆盖率",
-    "Boundary coverage": "边界场景覆盖率", "Integration coverage": "集成场景覆盖率",
-    "Data-quality coverage": "数据质量覆盖率",
-  }[label] ?? label) : label;
-  const checkLabel = (label: string) => zh ? ({
-    completeness: "完整性", validity: "有效性", "temporal consistency": "时间一致性",
-    "cross-table integrity": "跨表完整性", "source-target reconciliation": "源端与目标端对账", reconciliation: "源端与目标端对账",
-    "business rules": "业务规则",
-  }[label] ?? label) : label;
-  return (
-    <main lang={language}>
-      <nav className="nav" aria-label={tr("Primary navigation", "主导航") }>
-        <a className="brand" href="#top" aria-label={tr("Automotive Quality Engineering home", "汽车质量工程首页")}><span>AQ</span> Quality Engineering</a>
-        <div className="nav-links">
-          <a href="#architecture">{tr("Architecture", "系统架构")}</a><a href="#ai-value">{tr("Evidence", "实验结果")}</a><a href="#contribution">{tr("Contribution", "个人贡献")}</a>
-          <span className="language-switch" aria-label={tr("Language", "语言")}><a className={!zh ? "active" : ""} href="/en" lang="en">EN</a><i>/</i><a className={zh ? "active" : ""} href="/zh" lang="zh-CN">中文</a></span>
-        </div>
-      </nav>
-
-      <section className="hero section" id="top">
-        <div className="hero-copy">
-          <p className="eyebrow">{tr("PORTFOLIO CASE STUDY · QA / TEST DEVELOPMENT", "作品集案例 · QA / 测试开发")}</p>
-          <h1>{tr("Automotive Work Order", "汽车工单")}<br/><em>{tr("AI Quality Engineering", "AI 质量工程")}</em> {tr("Platform", "平台")}</h1>
-          <p className="lede">{tr("A production-shaped QA platform combining automotive data-quality validation, deterministic test automation, AI-assisted test design and RCA, Jira-based human review, and measured AI quality evaluation.", "融合数据质量验证、自动化测试、AI 辅助测试生成与 RCA、Jira 人工审核以及可量化 AI 评估的汽车质量工程平台。")}</p>
-          <div className="actions">
-            {githubUrl && <a className="button primary" href={githubUrl} target="_blank" rel="noreferrer">{tr("View source on GitHub", "查看 GitHub 源码")} <span>↗</span></a>}
-            <a className="button primary" href={`${evidencePath}#ai-value`}>{tr("View evaluation evidence", "查看 AI 评估证据")} <span>→</span></a>
-            <a className="button secondary" href="#architecture">{tr("Explore architecture", "查看系统架构")}</a>
-          </div>
-          <p className="hero-note"><span className="pulse"/> {tr("AI proposes. Deterministic controls and people decide.", "AI 提供辅助建议，确定性规则与人工审核负责最终决策。")}</p>
-        </div>
-        <div className="hero-panel" aria-label={tr("Project headline metrics", "项目核心指标")}>
-          <div className="panel-label"><span>{tr("CONTROLLED BENCHMARK", "受控基准")}</span><span>v2.0.0</span></div>
-          <div className="hero-metrics">
-            <article><strong>{metrics.benchmark.workOrders.toLocaleString()}</strong><span>{tr("synthetic work orders", "受控合成工单")}</span></article>
-            <article><strong>{metrics.benchmark.injectedDefects.toLocaleString()}</strong><span>{tr("injected defect rows", "人工注入缺陷记录")}</span></article>
-            <article className="wide"><strong>{metrics.benchmark.detectedDefects.toLocaleString()} / {metrics.benchmark.injectedDefects.toLocaleString()}</strong><span>{tr("deliberately injected rows detected", "受控 DQ 基准中成功识别")}</span></article>
-            <article><strong>{metrics.benchmark.aiEvaluationCases}</strong><span>{tr("curated AI cases", "AI 评估案例")}</span></article>
-            <article><strong>{metrics.testGeneration.runs}×</strong><span>{tr("real-provider runs", "真实模型实验轮次")}</span></article>
-          </div>
-          <div className="signal-line"><span>DQ</span><i/><span>TEST</span><i/><span>REVIEW</span><i/><span>GATE</span></div>
-        </div>
+  const t = (en:string, cn:string) => zh ? cn : en;
+  const [view,setView] = useState<View>("overview");
+  const [dq,setDq] = useState(false); const [generated,setGenerated] = useState(false);
+  const [decisions,setDecisions] = useState<Record<string,Decision>>({});
+  const [executed,setExecuted] = useState(false); const [rca,setRca] = useState(false); const [rcaDecision,setRcaDecision] = useState<Decision>("pending");
+  const approved = useMemo(()=>Object.entries(decisions).find(([,v])=>v==="approved")?.[0],[decisions]);
+  const go=(v:View)=>{setView(v);window.scrollTo({top:0,behavior:"smooth"});};
+  const reset=()=>{setView("overview");setDq(false);setGenerated(false);setDecisions({});setExecuted(false);setRca(false);setRcaDecision("pending");};
+  const done=(v:View)=>v==="dq"?dq:v==="generation"?generated:v==="review"?!!approved:v==="execution"?executed&&rca:false;
+  return <main className="prototype" lang={zh?"zh-CN":"en"}>
+    <header className="proto-top"><button className="proto-logo" onClick={()=>go("overview")}><span>AQ</span>{t("AI-Assisted Testing Platform","AI 辅助测试平台")}</button><div className="demo-chip"><i/> DEMO MODE <small>{t("Stored outputs · deterministic scenario","存储输出 · 确定性场景")}</small></div><div><a href={zh?"/en":"/zh"}>{zh?"EN":"中文"}</a><a href={github} target="_blank" rel="noreferrer">GitHub ↗</a></div></header>
+    <div className="proto-shell">
+      <aside className="proto-side"><p>{t("WORKFLOW","工作流")}</p><nav>{NAV.map(([id,en,cn],i)=><button key={id} className={view===id?"active":""} onClick={()=>go(id)}><span>{String(i+1).padStart(2,"0")}</span>{t(en,cn)}{id!=="overview"&&<i className={done(id)?"done":""}/>}</button>)}</nav><section><b>{t("Control principle","控制原则")}</b><p>{t("AI proposes. People and deterministic controls decide.","AI 提出建议，人工与确定性控制负责决策。")}</p><button onClick={reset}>{t("Reset demo","重置演示")}</button></section></aside>
+      <section className="proto-main">
+        {view==="overview"&&<Overview t={t} go={go}/>} {view==="dq"&&<DQ t={t} ran={dq} run={()=>setDq(true)} go={go}/>} {view==="generation"&&<Generation t={t} generated={generated} generate={()=>setGenerated(true)} go={go}/>} {view==="review"&&<Review t={t} generated={generated} decisions={decisions} decide={(id,d)=>setDecisions({...decisions,[id]:d})} go={go}/>} {view==="execution"&&<Execution t={t} approved={approved} executed={executed} execute={()=>setExecuted(true)} rca={rca} loadRca={()=>setRca(true)} rcaDecision={rcaDecision} setRcaDecision={setRcaDecision} go={go}/>} {view==="evaluation"&&<Evaluation t={t}/>} {null}
       </section>
-
-      <section className="problem section ruled">
-        <div><p className="section-index">01 / {tr("THE PROBLEM", "问题背景")}</p><h2>{tr("Operational data fails", "运营数据问题往往")}<br/>{tr("in connected ways.", "相互关联。")}</h2></div>
-        <div className="problem-copy">
-          <p>{tr("Automotive work-order platforms combine API data, relational records, OTA versions, diagnostic events, state transitions, timestamps, and downstream workflows.", "汽车工单平台连接 API 数据、关系型记录、OTA 版本、诊断事件、状态流转、时间戳与下游业务流程。")}</p>
-          <p>{tr("Quality failures surface as missing data, invalid transitions, cross-table inconsistencies, unsupported software versions, and temporal defects. This project explores where AI can assist—without making the LLM the final authority.", "质量问题可能表现为数据缺失、无效状态流转、跨表不一致、不受支持的软件版本或时间逻辑缺陷。本项目探索 AI 可以在哪些环节提供辅助，但不会让 LLM 成为最终裁决者。")}</p>
-        </div>
-      </section>
-
-      <section className="section" id="capabilities">
-        <header className="section-heading"><p className="section-index">02 / {tr("WHAT I BUILT", "项目能力")}</p><h2>{tr("One platform. Four engineering disciplines.", "一个平台，四类工程能力。")}</h2><p>{tr("Built as a cohesive quality system rather than a collection of disconnected demos.", "这是一个连贯的质量工程系统，而非彼此割裂的演示集合。")}</p></header>
-        <div className="capability-grid">
-          {capabilities.map((capability) => <article className="capability" key={capability.title}><span className="cap-tag">{capability.tag}</span><h3>{capability.title}</h3><ul>{capability.items.map(item => <li key={item}>{item}</li>)}</ul></article>)}
-        </div>
-      </section>
-
-      <section className="section dark" id="architecture">
-        <header className="section-heading inverse"><p className="section-index">03 / {tr("SYSTEM ARCHITECTURE", "系统架构")}</p><h2>{tr("Traceability from requirement", "从需求到发布决策的")}<br/>{tr("to release decision.", "端到端可追溯链路。")}</h2></header>
-        <div className="architecture" aria-label={tr("System architecture flow", "系统架构流程")}>
-          {architecture.map((node, index) => <div className="arch-wrap" key={node.join("-")}><article className={index === architecture.length - 1 ? "arch-node gate-node" : "arch-node"}><span>{String(index + 1).padStart(2, "0")}</span><strong>{node[0]}</strong><small>{node[1]}</small></article>{index < architecture.length - 1 && <b aria-hidden="true">→</b>}</div>)}
-        </div>
-        <p className="authority-rule"><span>{tr("CONTROL BOUNDARY", "控制边界")}</span> {tr("AI proposes and assists; Python, SQL, assertions, human review, and quality policies retain authority over execution and release decisions.", "AI 负责提出建议与提供辅助；Python、SQL、确定性断言、人工审核与质量策略继续掌握执行和发布决策权。")}</p>
-      </section>
-
-      <section className="section benchmark">
-        <div className="benchmark-copy"><p className="section-index">04 / {tr("CONTROLLED DATA QUALITY", "受控数据质量基准")}</p><h2>{tr("Known defects in.", "注入已知缺陷，")}<br/>{tr("Evidence out.", "输出可验证证据。")}</h2><p>{tr("All", "在受控合成基准中，全部")} <strong>{metrics.benchmark.injectedDefects.toLocaleString()}</strong> {tr("deliberately injected defect rows were detected in the controlled", "条人工注入缺陷记录均被识别，基准数据共")} <strong>{metrics.benchmark.workOrders.toLocaleString()}</strong>{tr("-record synthetic benchmark.", " 条。")}</p><div className="checks">{metrics.benchmark.checks.map(check => <span key={check}>{checkLabel(check)}</span>)}</div></div>
-        <div className="benchmark-visual"><div className="ring"><div><strong>{metrics.benchmark.detectedDefects.toLocaleString()}</strong><span>{tr("detected", "已识别")}</span></div></div><div className="benchmark-foot"><span><b>{metrics.benchmark.falseNegatives}</b> {tr("missed", "漏检")}</span><span><b>{metrics.benchmark.falsePositives}</b> {tr("false positives", "误报")}</span></div><p>{tr("Controlled benchmark result—not a claim of universal accuracy.", "这是受控基准结果，并非对通用准确率的宣称。")}</p></div>
-      </section>
-
-      <section className="section workflow-section">
-        <header className="section-heading"><p className="section-index">05 / {tr("AI-ASSISTED WORKFLOW", "AI 辅助测试流程")}</p><h2>{tr("Useful automation.", "让自动化创造价值，")}<br/>{tr("Explicit human control.", "同时保留明确的人工控制。")}</h2></header>
-        <div className="workflow">{workflow.map((step, index) => <div className="workflow-step" key={step}><span>{String(index + 1).padStart(2, "0")}</span><strong>{step}</strong>{index < workflow.length - 1 && <b>↓</b>}</div>)}</div>
-        <div className="never-rule"><span>{tr("NON-NEGOTIABLE", "不可妥协原则")}</span><strong>{tr("AI never decides test PASS / FAIL.", "AI 不直接决定测试通过或失败。")}</strong><p>{tr("Approved tests execute through deterministic assertions and evidence-producing services.", "通过审核的测试由确定性断言和证据生成服务执行。")}</p></div>
-      </section>
-
-      <section className="section evidence" id="ai-value">
-        <header className="section-heading"><p className="section-index">06 / {tr("MEASURED AI VALUE", "量化 AI 价值")}</p><h2>{tr("Measured gains.", "量化收益，")}<br/>{tr("Measured regressions.", "也量化风险。")}</h2><p>{tr("Three real-provider runs per experiment, complete human review, versioned inputs, and policy-based release gates.", "每项实验包含三轮真实模型运行、完整人工审核、版本化输入，以及基于策略的发布门禁。")}</p></header>
-        <div className="evidence-grid">
-          <article className="evidence-card">
-            <div className="evidence-title"><span>{tr("TEST GENERATION", "测试生成（Test Generation）")}</span><b className="status blocked">BLOCK<span>{zh ? " · 未通过质量门禁" : ""}</span></b></div>
-            <h3>{tr("AI improved the baseline—not human-only quality.", "AI 优于确定性基线，但未超过纯人工设计质量。")}</h3>
-            <div className="metric-table"><div className="table-head"><span>{tr("Metric", "指标")}</span><span>{tr("Deterministic", "确定性基线")}</span><span>{tr("AI-assisted", "AI 辅助")}</span></div>{metrics.testGeneration.coverage.map(row => <div className="table-row" key={row.label}><span>{metricLabel(row.label)}</span><span>{pct(row.baseline)}</span><strong>{pct(row.ai)}</strong></div>)}</div>
-            <div className="callout-row"><div className="positive"><span>{tr("Human effort saved", "人工投入减少")}</span><strong>{pct(metrics.testGeneration.humanEffortSaving)}</strong></div><div className="warning"><span>{tr("AI rejection rate", "AI 用例拒绝率")}</span><strong>{pct(metrics.testGeneration.rejectionRate)}</strong></div></div>
-            <div className="comparison-note"><span>{tr("Human-only coverage", "纯人工需求覆盖率")} <b>{pct(metrics.testGeneration.humanOnlyCoverage)}</b></span><span>{tr("AI-assisted", "AI 辅助")} <b>{pct(metrics.testGeneration.aiCoverage)}</b></span></div>
-          </article>
-
-          <article className="evidence-card rca-card">
-            <div className="evidence-title"><span>{tr("ROOT-CAUSE ANALYSIS", "根因分析（RCA）")}</span><b className="status blocked">BLOCK<span>{zh ? " · 未通过质量门禁" : ""}</span></b></div>
-            <h3>{tr("Faster investigation—not autonomous diagnosis.", "调查更高效，但不能自动诊断。")}</h3>
-            <div className="time-shift"><div><span>{tr("Deterministic", "确定性基线")}</span><strong>{metrics.rca.baselineSeconds.toFixed(2)} s</strong></div><b>→</b><div><span>{tr("AI-assisted", "AI 辅助")}</span><strong>{metrics.rca.aiSeconds.toFixed(2)} s</strong></div></div>
-            <div className="rca-metrics"><div><span>{tr("Recommended-check usefulness", "建议检查项有效性")}</span><strong>{pct(metrics.rca.checkUsefulness)}</strong><i className="good-bar" style={{"--value": `${metrics.rca.checkUsefulness * 100}%`} as React.CSSProperties}/></div><div><span>{tr("Evidence support", "证据支持率")}</span><strong>{pct(metrics.rca.evidenceSupport)}</strong><i className="good-bar" style={{"--value": `${metrics.rca.evidenceSupport * 100}%`} as React.CSSProperties}/></div><div className="failed-metric"><span>{tr("Root-cause accuracy", "根因准确率")}</span><strong>{pct(metrics.rca.rootCauseAccuracy)} — {tr("failed threshold", "未达阈值")}</strong><i className="bad-bar"/><small>{tr("Quality regression", "质量退化")}</small></div><div className="failed-metric"><span>{tr("Failure-class accuracy", "故障分类准确率")}</span><strong>{pct(metrics.rca.failureClassAccuracy)} — {tr("failed threshold", "未达阈值")}</strong><i className="bad-bar"/><small>{tr("Quality regression", "质量退化")}</small></div></div>
-            <p className="card-conclusion">{tr("Useful as an", "适合作为")} <strong>{tr("investigation assistant", "调查辅助工具")}</strong>{tr("; not reliable enough to operate as an autonomous diagnosis engine.", "，但可靠性不足以支持自主诊断。")}</p>
-          </article>
-        </div>
-      </section>
-
-      <section className="section gates">
-        <div className="gate-intro"><p className="section-index">07 / {tr("QUALITY GATES", "质量门禁（Quality Gate）")}</p><h2>{tr("The system knows", "系统知道")}<br/>{tr("when to say no.", "何时必须拒绝。")}</h2><p>{tr("Both configurations produced measurable benefits, but failed predefined thresholds. The platform blocks autonomous promotion rather than averaging failures away.", "两种配置都带来了可量化收益，但未通过预设阈值。平台会阻断自主上线，而不是用平均值掩盖失败指标。")}</p></div>
-        <div className="gate-cards"><article><span>{tr("TEST GENERATION", "测试生成")}</span><strong>BLOCK{zh ? " · 未通过质量门禁" : ""}</strong><p>{tr("Coverage, unsupported assumptions, and approval thresholds failed.", "覆盖率、无依据假设和审批率未达到门禁要求。")}</p></article><article><span>{tr("ROOT-CAUSE ANALYSIS", "根因分析")}</span><strong>BLOCK{zh ? " · 未通过质量门禁" : ""}</strong><p>{tr("Accuracy, abstention, and unsupported-claim thresholds failed.", "准确率、正确拒答率和无依据结论指标未达到门禁要求。")}</p></article></div>
-      </section>
-
-      <section className="section contribution" id="contribution">
-        <div><p className="section-index">08 / {tr("MY CONTRIBUTION", "个人贡献")}</p><h2>{tr("Designed and built", "独立完成设计与")}<br/>{tr("end to end.", "端到端实现。")}</h2></div>
-        <div><p>{tr("Independently designed and implemented the platform architecture, PostgreSQL data model, configurable DQ framework, SQL validation, automated test workflow, FastAPI services, Jira integration, AI provider abstraction, human-review path, RCA pipeline, evaluation framework, quality policies, and controlled benchmark experiments.", "独立设计并实现平台架构、PostgreSQL 数据模型、可配置 DQ 框架、SQL 验证、自动化测试流程、FastAPI 服务、Jira 集成、AI 提供方抽象、人工审核路径、RCA 流程、评估框架、质量策略与受控基准实验。")}</p><div className="stack">{metrics.technology.map(item => <span key={item}>{item}</span>)}</div></div>
-      </section>
-
-      <section className="section product-evidence" id="product-evidence">
-        <header className="section-heading"><p className="section-index">09 / {tr("SELECTED SYSTEM EVIDENCE", "系统证据节选")}</p><h2>{tr("Implemented workflows,", "展示真实实现流程，")}<br/>{tr("not presentation mockups.", "而非演示原型。")}</h2><p>{tr("Authentic captures from the FastAPI-backed Streamlit engineering console using the project’s local runtime and committed evaluation evidence.", "以下截图来自由 FastAPI 支撑的 Streamlit 工程控制台，使用项目本地运行时和已提交的评估证据。")}</p></header>
-        <div className="screenshot-grid">
-          <figure><a href="/screenshots/engineering-overview.png" target="_blank" rel="noreferrer"><Image src="/screenshots/engineering-overview.png" width={1280} height={720} sizes="(max-width: 640px) 100vw, 50vw" alt={tr("Engineering console overview with work-order metrics", "包含工单指标的工程控制台概览")}/></a><figcaption><span>01</span><strong>{tr("Engineering overview", "工程概览")}</strong><small>{tr("Live work-order and backlog metrics", "实时工单与待处理指标")}</small></figcaption></figure>
-          <figure><a href="/screenshots/test-runs.png" target="_blank" rel="noreferrer"><Image src="/screenshots/test-runs.png" width={1280} height={720} sizes="(max-width: 640px) 100vw, 50vw" alt={tr("Persistent test run records in the engineering console", "工程控制台中的持久化测试执行记录")}/></a><figcaption><span>02</span><strong>{tr("Test execution records", "测试执行记录")}</strong><small>{tr("Persistent deterministic run evidence", "持久化确定性执行证据")}</small></figcaption></figure>
-          <figure><a href="/screenshots/case-retrieval.png" target="_blank" rel="noreferrer"><Image src="/screenshots/case-retrieval.png" width={1280} height={720} sizes="(max-width: 640px) 100vw, 50vw" alt={tr("Authoritative case evidence retrieval interface", "权威案例证据检索界面")}/></a><figcaption><span>03</span><strong>{tr("Evidence retrieval", "证据检索")}</strong><small>{tr("Dataset-bound historical case search", "绑定数据集版本的历史案例搜索")}</small></figcaption></figure>
-          <figure><a href="/screenshots/ai-value-gates.png" target="_blank" rel="noreferrer"><Image src="/screenshots/ai-value-gates.png" width={1280} height={720} sizes="(max-width: 640px) 100vw, 50vw" alt={tr("AI value dashboard with BLOCK quality gate results", "显示 BLOCK 质量门禁结果的 AI 价值仪表板")}/></a><figcaption><span>04</span><strong>{tr("AI value and gates", "AI 价值与质量门禁")}</strong><small>{tr("Measured gains, failures, and BLOCK decisions", "量化收益、失败指标与 BLOCK 决策")}</small></figcaption></figure>
-        </div>
-      </section>
-
-      <section className="section evidence-links" id="evidence">
-        <header><p className="section-index">10 / {tr("EVIDENCE", "项目证据")}</p><h2>{tr("Inspect the files,", "查看真实文件，")}<br/>{tr("not just the claims.", "而不只是项目结论。")}</h2></header>
-        <div className="link-grid">{githubUrl && <a href={githubUrl} target="_blank" rel="noreferrer"><span>00</span><strong>{tr("GitHub source", "GitHub 源码")}</strong><small>{tr("Browse the implementation and test suite", "查看实现代码与测试套件")}</small><b>↗</b></a>}<a href={`${evidencePath}#project-guide`}><span>01</span><strong>{tr("Repository guide", "项目说明")}</strong><small>{tr("Project scope, setup, and implementation", "项目范围、运行方式与实现说明")}</small><b>→</b></a><a href={`${evidencePath}#ai-value`}><span>02</span><strong>{tr("AI evaluation evidence", "AI 评估证据")}</strong><small>{tr("Design, limitations, and reproducibility", "实验设计、局限与可复现性")}</small><b>→</b></a><a href={`${evidencePath}#test-generation`}><span>03</span><strong>{tr("Test-generation report", "测试生成报告")}</strong><small>{tr("Sanitized measured results", "脱敏后的量化结果")}</small><b>→</b></a><a href={`${evidencePath}#rca`}><span>04</span><strong>{tr("RCA report", "RCA 报告")}</strong><small>{tr("Accuracy, support, and policy results", "准确率、证据支持与策略结果")}</small><b>→</b></a><a href={`${evidencePath}#architecture`}><span>05</span><strong>{tr("Architecture document", "架构文档")}</strong><small>{tr("Runtime and system boundaries", "运行时与系统边界")}</small><b>→</b></a><a href="#product-evidence"><span>06</span><strong>{tr("Workflow captures", "流程截图")}</strong><small>{tr("Selected implemented product evidence", "已实现产品流程的证据节选")}</small><b>↑</b></a></div>
-      </section>
-
-      <footer><div className="brand"><span>AQ</span> Quality Engineering</div><p>{tr("Measured evidence over marketing claims.", "以量化证据取代营销式宣称。")}</p><small>{tr("Automotive Work Order Intelligence · Portfolio release v2.0.0", "汽车工单智能平台 · 作品集版本 v2.0.0")}</small></footer>
-    </main>
-  );
+      {view!=="overview"&&<Trace t={t} values={["REQ-017",generated?"AIRUN-017-03":"—",approved?`${approved}-v2`:"—","DATASET-v5",executed?"RESULT-842":"—",rca?"AIRUN-RCA-842":"—"]}/>} {null}
+    </div>
+  </main>;
 }
+
+const Head=({k,title,body}:{k:string;title:string;body:string})=><header className="proto-head"><p>{k}</p><h1>{title}</h1><span>{body}</span></header>;
+const Button=({children,onClick}:{children:React.ReactNode;onClick:()=>void})=><button className="proto-primary" onClick={onClick}>{children}</button>;
+const Empty=({title,body}:{title:string;body:string})=><div className="proto-empty"><span>READY</span><div><h2>{title}</h2><p>{body}</p></div></div>;
+const Metric=({v,l,tone=""}:{v:string;l:string;tone?:string})=><article className={tone}><strong>{v}</strong><span>{l}</span></article>;
+
+function Overview({t,go}:{t:(a:string,b:string)=>string;go:(v:View)=>void}){return <>
+  <section className="proto-hero"><div><p className="proto-kicker">{t("FUNCTIONAL PROTOTYPE · REPRODUCIBLE DEMO","功能原型 · 可复现演示")}</p><h1>{t("Automotive Work Order","汽车工单")}<br/><em>{t("Data Quality & AI-Assisted","数据质量与 AI 辅助")}</em><br/>{t("Test Engineering","测试工程平台")}</h1><p>{t("Experience a traceable workflow where AI assists test design and diagnosis while deterministic rules, human review, and Quality Gates retain control.","体验可追溯的质量工程流程：AI 辅助测试设计与诊断，确定性规则、人工审核和质量门禁保留控制权。")}</p><div><Button onClick={()=>go("dq")}>{t("Start interactive demo","开始交互演示")} →</Button><a href="/en/evidence">{t("View measured evidence","查看量化证据")}</a></div></div><aside><span>DEMO SCENARIO</span><b>REQ-017 / DATASET-v5</b><strong>12</strong><small>{t("guided actions","引导步骤")}</small><hr/><p>✓ {t("No API key required","无需 API 密钥")}</p><p>✓ {t("Same outcome every run","每次运行结果一致")}</p><p>✓ {t("Stored AI outputs","使用已存储 AI 输出")}</p></aside></section>
+  <section className="proto-metrics"><Metric v="30,000" l={t("Controlled work orders","受控工单")}/><Metric v="1,200 / 1,200" l={t("Injected defects detected","注入缺陷已检出")}/><Metric v="30 + 30" l={t("Generation / RCA cases","测试生成 / RCA 案例")}/><Metric v="48.98%" l={t("Human-effort reduction","人工投入减少")} tone="gain"/><Metric v="BLOCK" l={t("Current AI quality gate","当前 AI 质量门禁")} tone="risk"/></section>
+  <section className="proto-path"><header><span>01</span><div><h2>{t("A governed path from data to decision","从数据到决策的受控路径")}</h2><p>{t("Every stage exposes evidence, versions, and authority.","每个阶段都展示证据、版本与决策权。")}</p></div></header><div>{["Dataset","DQ validation","AI test generation","Human review","Deterministic run","AI RCA","Quality gate"].map((s,i)=><button key={s} onClick={()=>go((["dq","dq","generation","review","execution","execution","evaluation"] as View[])[i])}><span>{String(i+1).padStart(2,"0")}</span><b>{t(s,["数据集","DQ 验证","AI 测试生成","人工审核","确定性执行","AI RCA","质量门禁"][i])}</b>{i<6&&<i>→</i>}</button>)}</div></section>
+  <section className="proto-control"><span>{t("NON-NEGOTIABLE CONTROL","不可妥协的控制原则")}</span><strong>{t("AI never decides test PASS / FAIL.","AI 不直接决定测试通过或失败。")}</strong><p>{t("Approved tests execute through deterministic Python, SQL, and assertions. RCA remains advisory until a human confirms it.","通过审核的测试由确定性的 Python、SQL 与断言执行；RCA 在人工确认前始终只是建议。")}</p></section>
+  </>}
+
+function DQ({t,ran,run,go}:{t:(a:string,b:string)=>string;ran:boolean;run:()=>void;go:(v:View)=>void}){return <><Head k="02 / DATA QUALITY" title={t("Validate a versioned dataset","验证版本化数据集")} body={t("Run deterministic rules, inspect failures, and preserve downstream evidence.","运行确定性规则、检查失败记录，并保留下游证据。")}/><section className="proto-toolbar"><label>{t("Dataset version","数据集版本")}<select><option>DATASET-v5</option><option>DATASET-v4</option></select></label><div><span><b>30,000</b>{t("Rows","记录数")}</span><span><b>1,200</b>{t("Known defects","已知缺陷")}</span><span><b>READY</b>{t("Status","状态")}</span></div><Button onClick={run}>{ran?t("Run again","再次运行"):t("Run DQ validation","运行 DQ 验证")}</Button></section>{!ran?<Empty title={t("Validation is ready","验证已就绪")} body={t("Run the controlled rule set. The outcome is deterministic and reproducible.","运行受控规则集。结果具有确定性并可复现。")}/>:<><div className="dq-grid"><section className="proto-panel"><PanelHead title={t("Rule summary","规则摘要")} tag="DQ-RUN-2026-105" status="3 FAIL"/><div className="proto-table"><div><b>{t("Rule","规则")}</b><b>{t("Category","类别")}</b><b>{t("Status","状态")}</b><b>{t("Failures","失败数")}</b></div>{RULES.map(r=><div key={r[0]}><span>{r[0]}</span><span>{r[1]}</span><b className={r[2]==="PASS"?"pass":"fail"}>{r[2]}</b><strong>{r[3]}</strong></div>)}</div></section><section className="proto-panel"><PanelHead title="completion_after_creation" tag={t("SELECTED RULE","已选规则")} status="FAIL"/><dl className="rule-facts"><div><dt>{t("Expected","预期")}</dt><dd>completion_time &gt; creation_time</dd></div><div><dt>{t("Failed rows","失败记录")}</dt><dd>84</dd></div></dl><div className="sample"><div><b>order_id</b><b>vehicle_id</b><b>creation_time</b><b>completion_time</b></div>{ROWS.map(r=><div key={r[0]}>{r.map(c=><span key={c}>{c}</span>)}</div>)}</div></section></div><Next text={t("Evidence captured · DQ-RUN-2026-105","证据已保存 · DQ-RUN-2026-105")} action={t("Continue to test generation","继续进入测试生成")} onClick={()=>go("generation")}/></>}</>}
+
+function Generation({t,generated,generate,go}:{t:(a:string,b:string)=>string;generated:boolean;generate:()=>void;go:(v:View)=>void}){return <><Head k="03 / AI TEST GENERATION" title={t("Generate proposals, not verdicts","生成测试建议，而非测试结论")} body={t("A stored AIRun turns one requirement into structured, reviewable test cases.","已存储的 AIRun 将一条需求转换为结构化、可审核的测试用例。")}/><section className="requirement"><div><span>REQUIREMENT · REQ-017</span><b>{t("Temporal and vehicle-reference integrity","时间与车辆引用完整性")}</b></div><p>{t("When a service order is closed, completion_time must be later than creation_time, and the order must reference a valid vehicle_id.","当服务工单关闭时，completion_time 必须晚于 creation_time，且工单必须引用有效的 vehicle_id。")}</p><Button onClick={generate}>{generated?t("Reload stored AIRun","重新载入 AIRun"):t("Generate test cases","生成测试用例")}</Button></section>{!generated?<Empty title={t("Controlled generation is ready","受控生成已就绪")} body={t("Demo Mode loads a stored model response. No model call, credential, or cost is involved.","演示模式载入已存储的模型输出，无需模型调用、凭据或费用。")}/>:<><div className="airun">{[["AI RUN ID","AIRUN-017-03"],["PROMPT VERSION","test_generation/v3"],["MODEL CONFIG","demo-model-config-v2"],["RUN TYPE","TEST_GENERATION"]].map(x=><span key={x[0]}><small>{x[0]}</small><b>{x[1]}</b></span>)}</div><div className="case-grid">{CASES.map(c=><article key={c[0]}><header><span>{c[0]}</span><b>PENDING REVIEW</b></header><h3>{t(c[1],c[2])}</h3><dl><dt>{t("Preconditions","前置条件")}</dt><dd>A valid vehicle and closable order exist.</dd><dt>{t("Input data","输入数据")}</dt><dd>Controlled DATASET-v5 fixture</dd><dt>{t("Steps","步骤")}</dt><dd>Submit, persist, and execute the deterministic assertion.</dd><dt>{t("Expected result","预期结果")}</dt><dd>{c[3]}</dd></dl></article>)}</div><Next text={t("4 proposals generated · Human approval required","已生成 4 条建议 · 必须人工审核")} action={t("Open review queue","打开审核队列")} onClick={()=>go("review")}/></>}</>}
+
+function Review({t,generated,decisions,decide,go}:{t:(a:string,b:string)=>string;generated:boolean;decisions:Record<string,Decision>;decide:(id:string,d:Decision)=>void;go:(v:View)=>void}){if(!generated)return <><Head k="04 / HUMAN REVIEW" title={t("Review before execution","执行前先审核")} body={t("Generate versioned proposals before opening the review queue.","打开审核队列前，请先生成有版本记录的建议。")}/><Empty title={t("No generated tests yet","尚无生成的测试")} body={t("The queue only accepts traceable AI outputs.","队列只接收可追溯的 AI 输出。")}/><Button onClick={()=>go("generation")}>{t("Go to test generation","前往测试生成")}</Button></>;const approved=Object.entries(decisions).find(([,v])=>v==="approved")?.[0];return <><Head k="04 / HUMAN REVIEW" title={t("People approve test assets","由人工批准测试资产")} body={t("AI-generated cases remain proposals until a reviewer records a decision.","AI 生成的用例在审核人记录决定前始终只是建议。")}/><div className="review-grid"><div>{CASES.map(c=>{const d=decisions[c[0]]??"pending";return <article className={d} key={c[0]}><header><div><span>{c[0]}</span><h3>{t(c[1],c[2])}</h3></div><b>{d.toUpperCase()}</b></header><p>{c[3]}</p><div><button onClick={()=>decide(c[0],"approved")}>✓ {t("Approve","批准")}</button><button onClick={()=>decide(c[0],"rejected")}>× {t("Reject","拒绝")}</button></div></article>})}</div><aside><span>{t("REVIEW RECORD","审核记录")}</span><label>{t("Reviewer comment","审核意见")}<textarea placeholder={t("Record scope, assumptions, or rejection reason…","记录范围、假设或拒绝原因……")}/></label><dl><div><dt>{t("Requirement","需求")}</dt><dd>REQ-017</dd></div><div><dt>{t("AI Run","AI 运行")}</dt><dd>AIRUN-017-03</dd></div><div><dt>{t("Approved version","批准版本")}</dt><dd>{approved?`${approved}-v2`:"—"}</dd></div></dl></aside></div>{approved&&<Next text={t("Approved asset version created","已创建批准后的资产版本")} action={t("Continue to execution","继续进入执行")} onClick={()=>go("execution")}/>}</>}
+
+function Execution({t,approved,executed,execute,rca,loadRca,rcaDecision,setRcaDecision,go}:{t:(a:string,b:string)=>string;approved?:string;executed:boolean;execute:()=>void;rca:boolean;loadRca:()=>void;rcaDecision:Decision;setRcaDecision:(v:Decision)=>void;go:(v:View)=>void}){if(!approved)return <><Head k="05 / EXECUTION & RCA" title={t("Assertions decide. AI assists.","断言作出判定，AI 提供辅助")} body={t("An approved test asset is required before execution.","执行前需要已批准的测试资产。")}/><Empty title={t("Approval required","需要审核批准")} body={t("Approve at least one generated case before execution.","执行前请至少批准一条生成的用例。")}/><Button onClick={()=>go("review")}>{t("Open human review","打开人工审核")}</Button></>;return <><Head k="05 / EXECUTION & RCA" title={t("Assertions decide. AI assists.","断言作出判定，AI 提供辅助")} body={t("Execute an approved version, inspect deterministic evidence, then review advisory RCA.","执行已批准版本、检查确定性证据，然后审核建议性 RCA。")}/><div className="exec-stack"><section className="proto-panel"><PanelHead title={`${approved}-v2`} tag={t("DETERMINISTIC EXECUTOR","确定性执行器")} action={<Button onClick={execute}>{executed?t("Run again","再次运行"):t("Run test","运行测试")}</Button>}/><div className="exec-meta"><span><small>{t("Dataset","数据集")}</small>DATASET-v5</span><span><small>{t("Assertion","断言")}</small>completion_time &gt; creation_time</span><span><small>{t("Executor","执行器")}</small>python-assertion/v2</span></div>{executed&&<div className="result"><div><span>{t("RESULT","结果")}</span><strong>FAIL</strong><small>RESULT-842</small></div><dl><div><dt>creation_time</dt><dd>2026-10-12 11:20</dd></div><div><dt>completion_time</dt><dd>2026-10-12 10:45</dd></div><div><dt>{t("Evaluation","判定")}</dt><dd>10:45 is not later than 11:20</dd></div></dl></div>}<p className="authority"><b>{t("PASS/FAIL is determined by deterministic test logic.","PASS/FAIL 由确定性测试逻辑决定。")}</b> {t("The LLM does not participate in execution.","LLM 不参与执行判定。")}</p></section>{executed&&<section className="proto-panel"><PanelHead title={t("Investigate the failed result","调查失败结果")} tag={t("AI-ASSISTED RCA · ADVISORY","AI 辅助 RCA · 建议性输出")} action={<Button onClick={loadRca}>{t("Generate AI RCA","生成 AI RCA")}</Button>}/>{!rca?<p className="muted">{t("Deterministic evidence is ready. Load the stored AIRun for a hypothesis and recommended checks.","确定性证据已就绪。载入 AIRun 以获取假设与建议检查项。")}</p>:<div className="rca"><span>{t("CONFIDENCE · MEDIUM","置信度 · 中")}</span><h3>{t("Possible timestamp transformation issue during ETL processing","ETL 处理中可能存在时间戳转换问题")}</h3><p>{t("The persisted completion timestamp precedes creation by 35 minutes. Verify timezone normalization and source-to-target mapping before accepting this hypothesis.","持久化的完成时间比创建时间早 35 分钟。在接受此假设前，应验证时区标准化及源端到目标端映射。")}</p><ul><li>{t("Compare raw and warehouse timestamps","比较原始时间戳与数仓值")}</li><li>{t("Inspect ETL timezone conversion","检查 ETL 时区转换")}</li><li>{t("Re-run the deterministic assertion","重新运行确定性断言")}</li></ul><div><b>{t("Human confirmation required","需要人工确认")}</b><button className={rcaDecision==="approved"?"selected":""} onClick={()=>setRcaDecision("approved")}>✓ {t("Accept RCA","接受 RCA")}</button><button className={rcaDecision==="rejected"?"selected":""} onClick={()=>setRcaDecision("rejected")}>× {t("Reject","拒绝")}</button></div></div>}</section>}{rca&&<Next text={t("AIRUN-RCA-842 · Evidence preserved","AIRUN-RCA-842 · 证据已保存")} action={t("Open evaluation & gates","打开评估与门禁")} onClick={()=>go("evaluation")}/>}</div></>}
+
+function Evaluation({t}:{t:(a:string,b:string)=>string}){return <><Head k="06 / EVALUATION & QUALITY GATES" title={t("Measure usefulness and readiness separately","分别衡量有用性与就绪度")} body={t("Productivity gains do not override failed quality thresholds.","生产率收益不能覆盖未通过的质量阈值。")}/><div className="eval-grid"><section className="proto-panel"><PanelHead title={t("Coverage and effort","覆盖率与投入")} tag="TEST GENERATION" status="BLOCK"/><div className="metric-boxes"><Metric v="5.83%" l={t("Deterministic coverage","确定性基线覆盖率")}/><Metric v="49.35%" l={t("AI-assisted coverage","AI 辅助覆盖率")} tone="gain"/><Metric v="63.78%" l={t("Human-only coverage","纯人工覆盖率")}/><Metric v="48.98%" l={t("Human effort saved","人工投入减少")} tone="gain"/></div><p className="gate-note"><b>{t("Why BLOCK?","为何 BLOCK？")}</b>{t(" AI did not exceed human-only coverage and 60.42% of generated proposals were rejected."," AI 未超过纯人工覆盖率，且 60.42% 的生成建议被拒绝。")}</p></section><section className="proto-panel"><PanelHead title={t("Speed and reliability","速度与可靠性")} tag="ROOT-CAUSE ANALYSIS" status="BLOCK"/><div className="metric-boxes"><Metric v="77.60 s" l={t("Baseline time","基线用时")}/><Metric v="49.41 s" l={t("AI-assisted time","AI 辅助用时")} tone="gain"/><Metric v="75.56%" l={t("Check usefulness","检查项有效性")} tone="gain"/><Metric v="0.00%" l={t("Root-cause accuracy","根因准确率")} tone="risk"/></div><p className="gate-note"><b>{t("Why BLOCK?","为何 BLOCK？")}</b>{t(" Root-cause and failure-class accuracy did not satisfy predefined thresholds."," 根因准确率与故障分类准确率未达到预设阈值。")}</p></section></div><section className="gate-banner"><div><span>{t("CURRENT RELEASE DECISION","当前发布决策")}</span><strong>BLOCK</strong></div><p><b>{t("Improved productivity does not automatically mean production readiness.","生产率提升并不自动等同于生产就绪。")}</b>{t(" The platform preserves regressions and prevents autonomous promotion."," 平台保留退化结果并阻止模型自主上线。")}</p><a href="/en/evidence">{t("Open browser-friendly evidence","打开浏览器友好型证据")} →</a></section></>}
+
+function PanelHead({title,tag,status,action}:{title:string;tag:string;status?:string;action?:React.ReactNode}){return <header className="panel-head"><div><span>{tag}</span><h2>{title}</h2></div>{status?<b className="panel-status">{status}</b>:action}</header>}
+function Next({text,action,onClick}:{text:string;action:string;onClick:()=>void}){return <div className="proto-next"><p>✓ {text}</p><button onClick={onClick}>{action} →</button></div>}
+function Trace({t,values}:{t:(a:string,b:string)=>string;values:string[]}){const labels=[["Requirement","需求"],["AI Run","AI 运行"],["Test Case Version","测试用例版本"],["Dataset Version","数据集版本"],["Test Result","测试结果"],["RCA Run","RCA 运行"]];return <aside className="trace"><header><span>{t("LIVE TRACE","实时追踪")}</span><b>{t("Versioned chain","版本化链路")}</b></header>{labels.map((l,i)=><div className={values[i]==="—"?"empty":""} key={l[0]}><span>{String(i+1).padStart(2,"0")}</span><p><small>{t(l[0],l[1])}</small><b>{values[i]}</b></p>{i<5&&<i>↓</i>}</div>)}<footer>{t("Every artifact ties to exact inputs, model runs, reviews, and evidence.","每个资产都关联到准确的输入、模型运行、审核与证据。")}</footer></aside>}

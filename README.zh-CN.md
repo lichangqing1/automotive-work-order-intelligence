@@ -4,7 +4,7 @@
 
 **版本：** [`v2.0.0 — Measured AI Quality Platform`](docs/releases/v2.0.0.md)
 
-🌐 **在线演示：** [简体中文](https://automotive-ai-quality-engineering.p154820.chatgpt.site/zh) · [English](https://automotive-ai-quality-engineering.p154820.chatgpt.site/) · [GitHub 源码](https://github.com/lichangqing1/automotive-work-order-intelligence)
+🌐 **交互式功能原型：** [简体中文](https://automotive-ai-quality-engineering.p154820.chatgpt.site/zh) · [English](https://automotive-ai-quality-engineering.p154820.chatgpt.site/) · [GitHub 源码](https://github.com/lichangqing1/automotive-work-order-intelligence)
 
 > 本项目构建了一个面向汽车售后、OTA 与诊断工单真实工程流程设计的质量工程平台，将数据质量验证、自动化测试、AI 辅助测试生成、根因分析（Root Cause Analysis, RCA）、Jira 人工审核以及可量化的 AI 评估整合到同一条可追溯流程中。
 
