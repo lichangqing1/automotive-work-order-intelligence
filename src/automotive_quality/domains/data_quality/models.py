@@ -72,6 +72,12 @@ class DQRule(BaseModel):
             missing.append("column and min_value/max_value")
         if self.type == "conditional_not_null" and not (self.column or self.columns):
             missing.append("column/columns")
+        if self.type in {"conditional_not_null", "conditional_allowed_values"} and not (
+            self.condition or (self.condition_column and self.condition_values is not None)
+        ):
+            missing.append("condition/condition_column and condition_values")
+        if self.type == "column_comparison" and self.operator not in {">=", ">", "<=", "<", "=="}:
+            missing.append("supported operator")
         if missing:
             raise ValueError(f"{self.type} missing required fields: {', '.join(missing)}")
         if self.type in {"aggregate_reconciliation", "freshness"} and self.scope != RuleScope.DATASET:
@@ -93,6 +99,8 @@ class QualityResult:
 
     @property
     def passed(self) -> bool:
+        if self.configuration_errors:
+            return False
         failures = self.results.query("severity == 'critical' and status != 'PASS'")
         return failures.empty
 

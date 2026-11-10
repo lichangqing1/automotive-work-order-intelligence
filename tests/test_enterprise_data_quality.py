@@ -50,6 +50,17 @@ def test_missing_reference_table_is_explicit_error() -> None:
     result = evaluate_rules(_frame(), DQRuleSet(table="orders", rules=[rule]))
     assert result.configuration_errors == ["vehicle_fk: MISSING_REFERENCE_TABLE: vehicles"]
     assert result.results.iloc[0]["status"] == "RULE_CONFIGURATION_ERROR"
+    assert result.passed is False
+
+
+def test_comparison_rule_rejects_unsupported_operator_at_load_time() -> None:
+    with pytest.raises(ValueError, match="supported operator"):
+        DQRule(name="unsafe_comparison", type="column_comparison", left="created_at", operator="!=", right="resolved_at")
+
+
+def test_conditional_rule_requires_an_explicit_condition() -> None:
+    with pytest.raises(ValueError, match="condition"):
+        DQRule(name="unsafe_conditional", type="conditional_not_null", column="resolved_at")
 
 
 def test_freshness_rule() -> None:
