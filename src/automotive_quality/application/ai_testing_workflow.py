@@ -113,6 +113,28 @@ class AITestingWorkflow:
         return review
 
     def execute(self, requirement_version_id: str, test_case_version_ids: list[str], actuals: dict[str, str], dataset_version: str) -> dict:
+        if not test_case_version_ids:
+            raise WorkflowConflict("At least one test-case version is required")
+        requested_ids = set(test_case_version_ids)
+        if len(requested_ids) != len(test_case_version_ids):
+            raise WorkflowConflict("Duplicate test-case version IDs are not allowed")
+        if not actuals:
+            raise WorkflowConflict("Actual results are required for every requested test-case version")
+        if set(actuals) != requested_ids:
+            raise WorkflowConflict("Actual-result keys must exactly match requested test-case version IDs")
+        if any(not isinstance(actual, str) or not actual.strip() for actual in actuals.values()):
+            raise WorkflowConflict("Actual results must be non-empty strings")
+
+        datasets = self.session.scalars(
+            select(models.DatasetVersion).where(
+                (models.DatasetVersion.dataset_version_id == dataset_version)
+                | (models.DatasetVersion.version == dataset_version)
+            )
+        ).all()
+        if len(datasets) != 1:
+            raise WorkflowConflict("Unknown or ambiguous dataset version")
+        verified_dataset = datasets[0]
+
         versions = [self.session.get(models.TestCaseVersion, version_id) for version_id in test_case_version_ids]
         if any(version is None or version.requirement_version_id != requirement_version_id for version in versions):
             raise WorkflowConflict("Unknown test-case version for requirement")
@@ -121,33 +143,65 @@ class AITestingWorkflow:
         run_id = f"TR-{uuid4().hex[:12].upper()}"
         now = datetime.now(timezone.utc)
         run = models.TestRun(test_run_id=run_id, suite=f"REQ-{requirement_version_id}", environment=dataset_version, status="RUNNING", started_at=now)
-        self.session.add(run)
-        # Persist the parent before adding results. TestRun and TestResult do not
-        # expose an ORM relationship, so SQLAlchemy cannot derive their insert
-        # ordering solely from assigning the foreign-key string.
-        self.session.flush()
         failures: list[tuple[models.TestCaseVersion, models.TestResult, str]] = []
-        for version in versions:
-            assert version is not None
-            expected = str(version.content["expected_result"])
-            actual = actuals.get(version.test_case_version_id, expected)
-            status = "PASSED" if actual == expected else "FAILED"
-            result = models.TestResult(test_run_id=run_id, test_case_id=version.test_case_id, test_case_version_id=version.test_case_version_id, status=status, expected=expected, actual=actual, affected_rows=0, execution_ms=0, evidence={"dataset_version": dataset_version})
-            self.session.add(result)
-            if status == "FAILED":
-                signature = hashlib.sha256(f"{version.test_case_version_id}|{actual}|{dataset_version}".encode()).hexdigest()
-                failures.append((version, result, signature))
-        self.session.flush()
-        for _version, result, signature in failures:
-            link = self.session.scalar(select(models.ExternalIssueLink).where(models.ExternalIssueLink.idempotency_key == signature))
-            if link is None:
-                link = models.ExternalIssueLink(provider=self.tracker.name, issue_key=None, issue_url=None, artifact_type="TEST_RESULT", artifact_id=str(result.result_id), idempotency_key=signature, sync_status="PENDING", retry_count=0)
-                self.session.add(link)
-                self.session.flush()
-            result.external_issue_link_id = link.link_id
-        run.status = "FAILED" if failures else "PASSED"
-        run.completed_at = datetime.now(timezone.utc)
-        self.session.commit()  # Deterministic run/results are durable before Jira or AI enrichment.
+        try:
+            self.session.add(run)
+            # Persist the parent before adding results. TestRun and TestResult do
+            # not expose an ORM relationship, so SQLAlchemy cannot infer ordering.
+            self.session.flush()
+            for version in versions:
+                assert version is not None
+                expected = str(version.content["expected_result"])
+                actual = actuals[version.test_case_version_id]
+                status = "PASSED" if actual == expected else "FAILED"
+                result = models.TestResult(
+                    test_run_id=run_id,
+                    test_case_id=version.test_case_id,
+                    test_case_version_id=version.test_case_version_id,
+                    status=status,
+                    expected=expected,
+                    actual=actual,
+                    affected_rows=0,
+                    execution_ms=0,
+                    evidence={
+                        "dataset_version": verified_dataset.version,
+                        "dataset_version_id": verified_dataset.dataset_version_id,
+                        "execution_mode": "SUBMITTED_RESULTS_VALIDATION",
+                        "result_source": "CALLER_SUBMITTED",
+                    },
+                )
+                self.session.add(result)
+                if status == "FAILED":
+                    signature = hashlib.sha256(
+                        f"{version.test_case_version_id}|{actual}|{verified_dataset.dataset_version_id}".encode()
+                    ).hexdigest()
+                    failures.append((version, result, signature))
+            self.session.flush()
+            for _version, result, signature in failures:
+                link = self.session.scalar(
+                    select(models.ExternalIssueLink).where(models.ExternalIssueLink.idempotency_key == signature)
+                )
+                if link is None:
+                    link = models.ExternalIssueLink(
+                        provider=self.tracker.name,
+                        issue_key=None,
+                        issue_url=None,
+                        artifact_type="TEST_RESULT",
+                        artifact_id=str(result.result_id),
+                        idempotency_key=signature,
+                        sync_status="PENDING",
+                        retry_count=0,
+                    )
+                    self.session.add(link)
+                    self.session.flush()
+                result.external_issue_link_id = link.link_id
+            run.status = "FAILED" if failures else "PASSED"
+            run.completed_at = datetime.now(timezone.utc)
+            self.session.commit()  # Submitted evidence is durable before Jira or AI enrichment.
+        except Exception:
+            self.session.rollback()
+            raise
+
         for _version, result, _signature in failures:
             link = self.session.get(models.ExternalIssueLink, result.external_issue_link_id)
             assert link is not None
@@ -165,7 +219,22 @@ class AITestingWorkflow:
                 link.sync_error = f"{type(exc).__name__}: {exc}"
                 link.retry_count += 1
                 self.session.commit()
-        return {"test_run_id": run_id, "status": run.status, "failed": len(failures), "total": len(versions), "external_sync": [self.session.get(models.ExternalIssueLink, result.external_issue_link_id).sync_status for _, result, _ in failures]}
+        failed = len(failures)
+        total = len(versions)
+        return {
+            "test_run_id": run_id,
+            "status": run.status,
+            "execution_mode": "SUBMITTED_RESULTS_VALIDATION",
+            "automatically_executed": False,
+            "submitted_results": total,
+            "passed": total - failed,
+            "failed": failed,
+            "total": total,
+            "external_sync": [
+                self.session.get(models.ExternalIssueLink, result.external_issue_link_id).sync_status
+                for _, result, _ in failures
+            ],
+        }
 
     def traceability(self, requirement_version_id: str) -> dict:
         requirement = self._requirement(requirement_version_id)

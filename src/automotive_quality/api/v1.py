@@ -5,7 +5,7 @@ from functools import lru_cache
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -63,7 +63,19 @@ class TestRunRequest(BaseModel):
     requirement_version_id: str
     test_case_version_ids: list[str]
     dataset_version: str
-    actuals: dict[str, str] = {}
+    actuals: dict[str, str] = Field(default_factory=dict)
+
+
+class TestRunResponse(BaseModel):
+    test_run_id: str
+    status: str
+    execution_mode: str
+    automatically_executed: bool
+    submitted_results: int
+    passed: int
+    failed: int
+    total: int
+    external_sync: list[str]
 
 
 class ReviewDecisionRequest(BaseModel):
@@ -301,8 +313,9 @@ def decide_local_review(review_id: str, request: ReviewDecisionRequest, session:
     return {"review_id": synced.review_id, "status": synced.status, "artifact_ids": synced.artifact_ids}
 
 
-@router.post("/test-runs")
+@router.post("/test-runs", response_model=TestRunResponse)
 def launch_test_run(request: TestRunRequest, session: DatabaseSession) -> dict:
+    """Validate complete caller-submitted results; this does not execute test steps."""
     try:
         return _testing_workflow(session).execute(request.requirement_version_id, request.test_case_version_ids, request.actuals, request.dataset_version)
     except WorkflowConflict as exc:

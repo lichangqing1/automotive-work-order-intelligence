@@ -175,6 +175,8 @@ The evaluator is metric-agnostic. Adding a metric does not require changing Pyth
 
 The platform persists imported Jira requirements as immutable versions, links each AI analysis and generated test version to its `AIRun`, and creates one review issue per generation batch. Generated tests remain `REVIEW_REQUIRED` until the tracker reports an approved state; rejected or pending versions cannot execute. Every `TestResult` has relational links to the exact `TestCaseVersion`, external defect link, and RCA `AIRun`. Deterministic results commit before Jira synchronization; external work records `PENDING`, `SUCCEEDED`, or `FAILED` with retry state, and retry-safe external IDs prevent duplicate Jira issues.
 
+`POST /api/v1/test-runs` validates complete caller-submitted actual results against approved test expectations and a persisted dataset version. It does not execute test steps automatically. Persisted result evidence identifies the operation as submitted-results validation so manual evidence cannot be mistaken for deterministic execution.
+
 CI uses `ISSUE_TRACKER=local`. Set `ISSUE_TRACKER=jira` plus `JIRA_BASE_URL`, `JIRA_EMAIL`, `JIRA_API_TOKEN`, and `JIRA_PROJECT_KEY` for Jira Cloud. Credentials are never stored in the repository. The opt-in live contract is run with `pytest -m jira_integration tests/integration/test_jira_live.py`; normal CI never contacts Jira.
 
 ## Task 3: measured AI value

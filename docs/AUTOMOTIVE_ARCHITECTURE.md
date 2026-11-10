@@ -73,7 +73,7 @@ For production use, replace the benchmark with manually curated query/relevant-c
 
 Platform endpoints are rooted at `/api/v1`. Liveness confirms that the process is serving requests. Readiness executes `SELECT 1` against the configured PostgreSQL dependency and returns HTTP 503 when unavailable.
 
-Test runs are first-class objects with explicit status, expected/actual values, affected rows, evidence, and timing. PostgreSQL repositories persist test, DQ, evaluation, and AI audit history so API restarts do not erase platform state.
+Test runs are first-class objects with explicit status, expected/actual values, affected rows, evidence, and timing. The current test-run endpoint validates complete caller-submitted actual results; it does not execute test steps. Result evidence records this submission mode and the verified persistent dataset identity. PostgreSQL repositories persist test, DQ, evaluation, and AI audit history so API restarts do not erase platform state.
 
 ## Human-reviewed AI testing workflow
 

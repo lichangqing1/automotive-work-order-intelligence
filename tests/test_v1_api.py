@@ -113,7 +113,7 @@ def test_ai_assisted_jira_review_execution_defect_and_traceability_workflow() ->
     review_id = generation["review_id"]
     version_id = generation["test_case_version_ids"][0]
 
-    blocked = client.post("/api/v1/test-runs", json={"requirement_version_id": requirement_version_id, "test_case_version_ids": [version_id], "dataset_version": "api-test"})
+    blocked = client.post("/api/v1/test-runs", json={"requirement_version_id": requirement_version_id, "test_case_version_ids": [version_id], "dataset_version": "api-test", "actuals": {version_id: "submitted while pending"}})
     assert blocked.status_code == 409
 
     tracker = _issue_tracker()
