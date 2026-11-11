@@ -27,6 +27,11 @@ def reconcile_grouped_metrics(
     metric: str,
     tolerance: float = 0,
 ) -> list[ReconciliationResult]:
+    for name, frame in (("expected", expected), ("actual", actual)):
+        duplicates = frame.duplicated(keys, keep=False)
+        if duplicates.any():
+            duplicate_keys = frame.loc[duplicates, keys].drop_duplicates().to_dict("records")
+            raise ValueError(f"Duplicate {name} reconciliation keys: {duplicate_keys}")
     merged = expected[keys + [metric]].merge(actual[keys + [metric]], on=keys, how="outer", suffixes=("_expected", "_actual")).fillna(0)
     results: list[ReconciliationResult] = []
     for _, row in merged.iterrows():
@@ -35,4 +40,3 @@ def reconcile_grouped_metrics(
         variance = actual_value - expected_value
         results.append(ReconciliationResult(f"{metric}[{label}]", abs(variance) <= tolerance, expected_value, actual_value, variance))
     return results
-

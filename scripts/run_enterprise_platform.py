@@ -30,7 +30,7 @@ def main() -> None:
             "final_gate_passed": summary.final_gate_passed,
             "defect_metrics": summary.defect_metrics.__dict__, "reconciliation": summary.reconciliation.__dict__,
             "sql_validations": summary.sql_validations,
-            "database_kpis": database_kpis(session),
+            "database_kpis": database_kpis(session, args.dataset_version),
         }
         print(json.dumps(output, indent=2, default=str))
     if not summary.final_gate_passed:

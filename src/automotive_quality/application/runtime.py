@@ -12,6 +12,7 @@ from automotive_quality.domains.data_quality.service import evaluate_rules
 from automotive_quality.domains.work_orders.ingestion import IngestionSummary, ingest_generated_dataset
 from automotive_quality.domains.work_orders.reconciliation import ReconciliationResult, reconcile_counts
 from automotive_quality.infrastructure.database import models
+from automotive_quality.infrastructure.database.dataset_versions import resolve_dataset_version
 from automotive_quality.infrastructure.database.repositories import DQRunRepository
 from automotive_quality.infrastructure.database.sql_executor import SQLAssetExecutor
 from automotive_quality.infrastructure.sources.synthetic import WorkOrderDataset
@@ -62,7 +63,7 @@ class PlatformRuntime:
         ingestion = ingest_generated_dataset(self.session, clean_data, version=dataset_version, rejected_rows=len(quarantined_indices))
         dq_run_id = f"DQR-{uuid4().hex[:12].upper()}"
         repository = DQRunRepository(self.session)
-        repository.create(dq_run_id, dataset_version)
+        repository.create(dq_run_id, ingestion.dataset_version_id)
         rules_by_name = {rule.name: rule for rule in rules.rules}
         for row in source_quality.results.to_dict("records"):
             configured_rule = rules_by_name[row["rule_name"]]
@@ -87,8 +88,9 @@ class PlatformRuntime:
         # ground-truth row to be quarantined.
         detection_passed = detection.precision >= 0.80 and detection.recall >= 0.80
         repository.complete(dq_run_id, publication_quality.passed and detection_passed)
-        persisted = int(self.session.scalar(select(func.count()).select_from(models.WorkOrder)) or 0)
-        reconciliation = reconcile_counts(len(data.work_orders), len(quarantined_indices), persisted)
+        reconciliation = dataset_reconciliation(
+            self.session, ingestion.dataset_version_id, raw_count=len(data.work_orders)
+        )
         sql_executor = SQLAssetExecutor(self.session, "sql")
         sql_executor.execute_marts()
         sql_validations = sql_executor.validate_platform(dataset_version)
@@ -97,9 +99,48 @@ class PlatformRuntime:
         return PlatformRunSummary(ingestion, dq_run_id, source_quality.passed, detection_passed, publication_quality.passed, final_gate, detection, reconciliation, sql_validations)
 
 
-def database_kpis(session: Session) -> dict[str, int]:
+def dataset_reconciliation(
+    session: Session,
+    dataset_version: str,
+    *,
+    raw_count: int | None = None,
+) -> ReconciliationResult:
+    version = resolve_dataset_version(session, dataset_version)
+    runs = session.scalars(select(models.IngestionRun).where(
+        models.IngestionRun.dataset_version_id == version.dataset_version_id
+    )).all()
+    if len(runs) != 1:
+        raise ValueError(
+            f"Dataset version {version.dataset_version_id} must have exactly one ingestion run; found {len(runs)}"
+        )
+    run = runs[0]
+    source_count = raw_count if raw_count is not None else run.ingested_rows + run.rejected_rows
+    clean_count = int(session.scalar(
+        select(func.count()).select_from(models.WorkOrderSnapshot).where(
+            models.WorkOrderSnapshot.dataset_version_id == version.dataset_version_id
+        )
+    ) or 0)
+    return reconcile_counts(source_count, run.rejected_rows, clean_count)
+
+
+def database_kpis(session: Session, dataset_version: str | None = None) -> dict[str, int | str]:
+    if dataset_version is None:
+        return {
+            "total_work_orders": int(session.scalar(select(func.count()).select_from(models.WorkOrder)) or 0),
+            "ota_work_orders": int(session.scalar(select(func.count()).select_from(models.WorkOrder).where(models.WorkOrder.service_type == "OTA")) or 0),
+            "open_backlog": int(session.scalar(select(func.count()).select_from(models.WorkOrder).where(models.WorkOrder.status.in_(["OPEN", "IN_PROGRESS"]))) or 0),
+        }
+
+    version = resolve_dataset_version(session, dataset_version)
+    snapshots = session.scalars(select(models.WorkOrderSnapshot).where(
+        models.WorkOrderSnapshot.dataset_version_id == version.dataset_version_id
+    )).all()
+    payloads = [item.payload for item in snapshots]
     return {
-        "total_work_orders": int(session.scalar(select(func.count()).select_from(models.WorkOrder)) or 0),
-        "ota_work_orders": int(session.scalar(select(func.count()).select_from(models.WorkOrder).where(models.WorkOrder.service_type == "OTA")) or 0),
-        "open_backlog": int(session.scalar(select(func.count()).select_from(models.WorkOrder).where(models.WorkOrder.status.in_(["OPEN", "IN_PROGRESS"]))) or 0),
+        "dataset_version_id": version.dataset_version_id,
+        "dataset_version": version.version,
+        "scope": "DATASET_VERSION",
+        "total_work_orders": len(payloads),
+        "ota_work_orders": sum(item.get("service_type") == "OTA" for item in payloads),
+        "open_backlog": sum(item.get("status") in {"OPEN", "IN_PROGRESS"} for item in payloads),
     }

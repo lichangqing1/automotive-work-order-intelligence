@@ -5,6 +5,8 @@ from pathlib import Path
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from automotive_quality.infrastructure.database.dataset_versions import resolve_dataset_version
+
 
 class SQLAssetExecutor:
     def __init__(self, session: Session, sql_root: str | Path) -> None:
@@ -24,8 +26,10 @@ class SQLAssetExecutor:
     def validate_platform(self, dataset_version: str) -> dict[str, bool]:
         if self.session.bind is None or self.session.bind.dialect.name != "postgresql":
             return {"referential_integrity": True, "ota_compatibility": True, "source_target_reconciliation": True}
-        referential = self.run_validation("referential_integrity")
-        ota = self.run_validation("ota_compatibility")
-        reconciliation = self.run_validation("source_target_reconciliation", {"dataset_version": dataset_version})
+        version_id = resolve_dataset_version(self.session, dataset_version).dataset_version_id
+        parameters = {"dataset_version_id": version_id}
+        referential = self.run_validation("referential_integrity", parameters)
+        ota = self.run_validation("ota_compatibility", parameters)
+        reconciliation = self.run_validation("source_target_reconciliation", parameters)
         reconciled = bool(reconciliation) and reconciliation[0]["expected_clean_count"] == reconciliation[0]["actual_clean_count"]
         return {"referential_integrity": not referential, "ota_compatibility": not ota, "source_target_reconciliation": reconciled}

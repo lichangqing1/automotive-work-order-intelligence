@@ -31,6 +31,11 @@ from automotive_quality.domains.retrieval.models import SimilarCase
 from automotive_quality.domains.retrieval.service import RetrievalIndexNotReady, RetrievalService
 from automotive_quality.domains.testing.models import TestRun
 from automotive_quality.infrastructure.database import models as database_models
+from automotive_quality.infrastructure.database.dataset_versions import (
+    AmbiguousDatasetVersion,
+    UnknownDatasetVersion,
+    resolve_dataset_version,
+)
 from automotive_quality.infrastructure.database.repositories import AIRunRepository, PostgresTestRunRepository
 from automotive_quality.integrations.issue_tracker import IssueTracker, LocalIssueTracker
 from automotive_quality.integrations.jira import JiraIssueTracker
@@ -184,8 +189,13 @@ def get_test_run(run_id: str, session: DatabaseSession) -> TestRun:
 
 
 @router.get("/metrics/overview")
-def overview(session: DatabaseSession) -> dict[str, int]:
-    return database_kpis(session)
+def overview(session: DatabaseSession, dataset_version: str | None = None) -> dict[str, object]:
+    try:
+        return database_kpis(session, dataset_version)
+    except UnknownDatasetVersion as exc:
+        raise HTTPException(status_code=404, detail="Dataset version not found") from exc
+    except AmbiguousDatasetVersion as exc:
+        raise HTTPException(status_code=409, detail="Dataset version label is ambiguous; use dataset_version_id") from exc
 
 
 @router.get("/datasets")
@@ -196,11 +206,22 @@ def list_datasets(session: DatabaseSession) -> list[dict[str, object]]:
 
 @router.get("/datasets/{version}")
 def get_dataset(version: str, session: DatabaseSession) -> dict[str, object]:
-    item = session.scalar(select(database_models.DatasetVersion).where(database_models.DatasetVersion.version == version))
-    if item is None:
+    try:
+        item = resolve_dataset_version(session, version)
+    except UnknownDatasetVersion:
         raise HTTPException(status_code=404, detail="Dataset version not found")
+    except AmbiguousDatasetVersion as exc:
+        raise HTTPException(status_code=409, detail="Dataset version label is ambiguous; use dataset_version_id") from exc
     snapshot_count = len(session.scalars(select(database_models.WorkOrderSnapshot.snapshot_id).where(database_models.WorkOrderSnapshot.dataset_version_id == item.dataset_version_id)).all())
-    return {"dataset_version_id": item.dataset_version_id, "dataset_id": item.dataset_id, "version": item.version, "row_count": item.row_count, "snapshot_count": snapshot_count, "content_hash": item.content_hash, "created_at": item.created_at}
+    ingestion_runs = session.scalars(select(database_models.IngestionRun).where(
+        database_models.IngestionRun.dataset_version_id == item.dataset_version_id
+    )).all()
+    if len(ingestion_runs) > 1:
+        raise HTTPException(status_code=409, detail="Dataset version has multiple ingestion runs")
+    ingestion = ingestion_runs[0] if ingestion_runs else None
+    quarantined = ingestion.rejected_rows if ingestion else 0
+    source_count = (ingestion.ingested_rows + quarantined) if ingestion else item.row_count
+    return {"dataset_version_id": item.dataset_version_id, "dataset_id": item.dataset_id, "version": item.version, "row_count": item.row_count, "source_row_count": source_count, "clean_row_count": snapshot_count, "quarantined_row_count": quarantined, "snapshot_count": snapshot_count, "content_hash": item.content_hash, "created_at": item.created_at}
 
 
 @router.post("/ai/requirements/analyze", response_model=RequirementAnalysis)

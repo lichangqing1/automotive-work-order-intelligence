@@ -26,6 +26,7 @@ class IngestionStatus(StrEnum):
 @dataclass(frozen=True)
 class IngestionSummary:
     run_id: str
+    dataset_version_id: str
     status: IngestionStatus
     ingested_rows: int
     rejected_rows: int
@@ -77,6 +78,7 @@ def ingest_generated_dataset(session: Session, data: WorkOrderDataset, *, versio
             row["ota_version"] = ota_by_vehicle.get(row["vehicle_id"])
             session.merge(models.WorkOrder(**row))
             snapshot_payload = json.loads(json.dumps(raw, default=str))
+            snapshot_payload["ota_version"] = row["ota_version"]
             row_hash = hashlib.sha256(json.dumps(snapshot_payload, sort_keys=True).encode()).hexdigest()
             session.add(models.WorkOrderSnapshot(dataset_version_id=version_id, work_order_id=str(row["work_order_id"]), payload=snapshot_payload, row_hash=row_hash))
             if row.get("resolution"):
@@ -98,4 +100,4 @@ def ingest_generated_dataset(session: Session, data: WorkOrderDataset, *, versio
         run.error = str(exc)
         run.completed_at = datetime.now(timezone.utc)
         raise
-    return IngestionSummary(run_id, IngestionStatus(run.status), run.ingested_rows, run.rejected_rows)
+    return IngestionSummary(run_id, version_id, IngestionStatus(run.status), run.ingested_rows, run.rejected_rows)

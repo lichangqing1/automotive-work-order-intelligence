@@ -3,7 +3,8 @@ from __future__ import annotations
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from .models import DatasetVersion, WorkOrderSnapshot
+from .dataset_versions import UnknownDatasetVersion, resolve_dataset_version
+from .models import WorkOrderSnapshot
 
 
 class PostgresCaseRepository:
@@ -11,9 +12,10 @@ class PostgresCaseRepository:
         self.session = session
 
     def resolve_version_id(self, version: str) -> str | None:
-        if version.startswith("DSV-") and self.session.get(DatasetVersion, version):
-            return version
-        return self.session.scalar(select(DatasetVersion.dataset_version_id).where(DatasetVersion.version == version))
+        try:
+            return resolve_dataset_version(self.session, version).dataset_version_id
+        except UnknownDatasetVersion:
+            return None
 
     def list_cases(self, dataset_version: str) -> list[dict[str, object]]:
         version_id = self.resolve_version_id(dataset_version)

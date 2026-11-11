@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pandas as pd
 import pytest
 from sqlalchemy import create_engine
@@ -42,10 +44,27 @@ def test_sql_reconciliation_uses_version_scoped_clean_snapshots() -> None:
         session.flush()
 
         result = SQLAssetExecutor(session, "sql").run_validation(
-            "source_target_reconciliation", {"dataset_version": "clean-v1"},
+            "source_target_reconciliation", {"dataset_version_id": "DSV-clean-v1"},
         )
 
         assert result == [{"expected_clean_count": 2, "actual_clean_count": 2}]
+
+
+def test_grouped_reconciliation_rejects_duplicate_group_identities() -> None:
+    duplicated = pd.DataFrame({"ota": ["6.2.1", "6.2.1"], "issues": [2, 3]})
+    actual = pd.DataFrame({"ota": ["6.2.1"], "issues": [5]})
+
+    with pytest.raises(ValueError, match="Duplicate expected reconciliation keys"):
+        reconcile_grouped_metrics(duplicated, actual, keys=["ota"], metric="issues")
+
+
+def test_sql_validations_and_marts_declare_dataset_version_scope() -> None:
+    for path in Path("sql/validations").glob("*.sql"):
+        assert ":dataset_version_id" in path.read_text(encoding="utf-8")
+    for path in Path("sql/marts").glob("*.sql"):
+        sql = path.read_text(encoding="utf-8")
+        assert "work_order_snapshots" in sql
+        assert "dataset_version_id" in sql
 
 
 @pytest.mark.parametrize(("op", "threshold", "passed"), [(">=", 0.8, True), (">", 0.9, False), ("<=", 0.9, True), ("<", 0.9, False)])
