@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import statistics
+from collections import Counter
 from pathlib import Path
 from typing import Any, Literal
 
@@ -69,6 +70,23 @@ class HumanTestDesignMeasurement(BaseModel):
     case_id: str
     active_design_seconds: float = Field(gt=0)
     validated_coverage: list[str]
+
+
+def validate_generated_test_identities(
+    suite: GeneratedTestSuite,
+    *,
+    variant: str,
+    case_id: str,
+    run_number: int,
+) -> None:
+    counts = Counter(case.test_id for case in suite.cases)
+    duplicates = sorted(test_id for test_id, count in counts.items() if count > 1)
+    if duplicates:
+        identities = "; ".join(
+            f"variant={variant}, case_id={case_id}, run_number={run_number}, test_id={test_id}"
+            for test_id in duplicates
+        )
+        raise ValueError(f"Duplicate generated review identity: {identities}")
 
 
 def load_jsonl(path: str | Path, model: type[BaseModel]) -> list[Any]:
