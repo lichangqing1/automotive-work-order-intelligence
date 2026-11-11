@@ -15,6 +15,7 @@ from automotive_quality.domains.ai.providers.openai import OpenAIProvider
 from automotive_quality.domains.ai.schemas import AIRootCauseAnalysis, GeneratedTestSuite
 from automotive_quality.domains.ai.workflows import AIWorkflowService
 from automotive_quality.domains.evaluation.ai_value import (
+    RCA_METRIC_VERSION,
     HumanTestDesignMeasurement,
     RCACase,
     RCAReview,
@@ -285,6 +286,7 @@ def run_rca(args: argparse.Namespace, source_raw: list[dict] | None = None) -> t
         "baseline": aggregate(baseline_rows), "ai_assisted": aggregate(ai_rows),
         "reviewed": review_completeness["complete"],
         "review_completeness": review_completeness,
+        "metric_version": RCA_METRIC_VERSION,
     }
     report["difference_ai_minus_baseline"] = mean_differences(report["baseline"], report["ai_assisted"])
     return report, raw, queue

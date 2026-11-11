@@ -22,9 +22,36 @@ by a human, and the immutable report is marked publishable.
 ## RCA experiment
 
 The deterministic and AI conditions receive identical evidence IDs and facts.
-Evaluation scores failure class, known root cause, citation validity, evidence
-correctness against `supporting_evidence_ids`, unsupported claims, and correct
-abstention. Reviewers separately score
+Evaluation scores failure class and root-cause identity by normalized exact
+match. Root-cause paraphrases count only when the benchmark explicitly lists
+them in `equivalent_root_causes`; substring overlap is never a match. A missing
+ground-truth root cause receives zero root-cause accuracy and is evaluated via
+the separate abstention metric. All predicted root-cause labels must belong to
+the accepted canonical/equivalent set, so adding an unrelated cause does not
+preserve a successful identity score.
+
+Claim-level evidence metrics have distinct numerators:
+
+- citation validity is the share of distinct claim/evidence references whose
+  evidence ID exists in the case;
+- evidence correctness is the share of those references whose ID belongs to
+  the human-authored `supporting_evidence_ids` set;
+- evidence support is the share of asserted claims with at least one correct
+  reference, and a wrong root-cause assertion cannot be made supported merely
+  by attaching a correct-looking evidence ID;
+- unsupported-claim rate is the share of asserted claims without that support;
+- correct abstention requires an insufficient-evidence case, an explicit
+  abstention, and no root-cause or explanatory assertions.
+
+Repeated evidence IDs inside one claim are counted once. An asserted root
+cause without a corresponding claim-level citation receives zero citation,
+correctness, and support scores. A no-claim response receives vacuous perfect
+evidence scores only when it is a correct abstention; omission on a
+sufficient-evidence case receives zero. These metrics validate the curated
+ID-to-case mapping, not semantic entailment of arbitrary prose; conclusions
+beyond that mapping require human review.
+
+Reviewers separately score
 recommended-check usefulness and record matched investigation time. Claims
 citing unknown or irrelevant evidence IDs count as unsupported.
 
