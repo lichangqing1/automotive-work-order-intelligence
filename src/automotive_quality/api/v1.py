@@ -219,9 +219,12 @@ def get_dataset(version: str, session: DatabaseSession) -> dict[str, object]:
     if len(ingestion_runs) > 1:
         raise HTTPException(status_code=409, detail="Dataset version has multiple ingestion runs")
     ingestion = ingestion_runs[0] if ingestion_runs else None
+    attempts = session.scalars(select(database_models.IngestionAttempt).where(
+        database_models.IngestionAttempt.dataset_version_id == item.dataset_version_id
+    ).order_by(database_models.IngestionAttempt.started_at)).all()
     quarantined = ingestion.rejected_rows if ingestion else 0
     source_count = (ingestion.ingested_rows + quarantined) if ingestion else item.row_count
-    return {"dataset_version_id": item.dataset_version_id, "dataset_id": item.dataset_id, "version": item.version, "row_count": item.row_count, "source_row_count": source_count, "clean_row_count": snapshot_count, "quarantined_row_count": quarantined, "snapshot_count": snapshot_count, "content_hash": item.content_hash, "created_at": item.created_at}
+    return {"dataset_version_id": item.dataset_version_id, "dataset_id": item.dataset_id, "version": item.version, "row_count": item.row_count, "source_row_count": source_count, "clean_row_count": snapshot_count, "quarantined_row_count": quarantined, "snapshot_count": snapshot_count, "content_hash": item.content_hash, "source_hash_version": item.source_hash_version, "ingestion_status": ingestion.status if ingestion else None, "ingestion_attempt_count": len(attempts), "last_ingestion_attempt_status": attempts[-1].status if attempts else None, "created_at": item.created_at}
 
 
 @router.post("/ai/requirements/analyze", response_model=RequirementAnalysis)

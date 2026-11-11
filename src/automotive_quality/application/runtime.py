@@ -9,7 +9,11 @@ from sqlalchemy.orm import Session
 
 from automotive_quality.domains.data_quality.io import load_rules
 from automotive_quality.domains.data_quality.service import evaluate_rules
-from automotive_quality.domains.work_orders.ingestion import IngestionSummary, ingest_generated_dataset
+from automotive_quality.domains.work_orders.ingestion import (
+    IngestionSummary,
+    dataset_content_hash,
+    ingest_generated_dataset,
+)
 from automotive_quality.domains.work_orders.reconciliation import ReconciliationResult, reconcile_counts
 from automotive_quality.infrastructure.database import models
 from automotive_quality.infrastructure.database.dataset_versions import resolve_dataset_version
@@ -60,7 +64,14 @@ class PlatformRuntime:
         publication_quality = evaluate_rules(clean_for_validation, rules, reference_tables={"vehicles": data.vehicles, "ota_releases": data.ota_releases})
         filtered_diagnostics = data.diagnostic_events[data.diagnostic_events["work_order_id"].isin(clean_orders["work_order_id"])]
         clean_data = WorkOrderDataset(clean_orders, data.vehicles, data.ota_releases, filtered_diagnostics, set())
-        ingestion = ingest_generated_dataset(self.session, clean_data, version=dataset_version, rejected_rows=len(quarantined_indices))
+        ingestion = ingest_generated_dataset(
+            self.session,
+            clean_data,
+            version=dataset_version,
+            rejected_rows=len(quarantined_indices),
+            source_content_hash=dataset_content_hash(data),
+            source_row_count=len(data.work_orders),
+        )
         dq_run_id = f"DQR-{uuid4().hex[:12].upper()}"
         repository = DQRunRepository(self.session)
         repository.create(dq_run_id, ingestion.dataset_version_id)

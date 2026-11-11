@@ -8,7 +8,7 @@ def test_complete_schema_can_be_created_from_metadata() -> None:
     engine = create_engine("sqlite+pysqlite:///:memory:")
     Base.metadata.create_all(engine)
     tables = set(inspect(engine).get_table_names())
-    assert {"datasets", "dataset_versions", "ingestion_runs"} <= tables
+    assert {"datasets", "dataset_versions", "ingestion_runs", "ingestion_attempts"} <= tables
     assert {"vehicles", "work_orders", "ota_releases", "diagnostic_events", "resolution_history"} <= tables
     assert {"dq_rules", "dq_rule_versions", "dq_runs", "dq_results"} <= tables
     assert {"test_cases", "test_runs", "test_results", "ai_runs", "evaluation_runs", "evaluation_metrics"} <= tables
@@ -16,6 +16,10 @@ def test_complete_schema_can_be_created_from_metadata() -> None:
     assert {"review_started_at", "active_review_seconds", "was_modified", "rejection_reasons", "validated_coverage"} <= review_columns
     evaluation_columns = {item["name"] for item in inspect(engine).get_columns("evaluation_runs")}
     assert {"experiment_group", "variant", "provider", "model", "dataset_hash", "configuration", "raw_outputs", "summary"} <= evaluation_columns
+    dataset_version_columns = {item["name"] for item in inspect(engine).get_columns("dataset_versions")}
+    assert {"source_content_hash", "source_hash_version"} <= dataset_version_columns
+    attempt_columns = {item["name"] for item in inspect(engine).get_columns("ingestion_attempts")}
+    assert {"attempt_id", "dataset_version_reference", "status", "failure_stage", "error_category", "sanitized_error"} <= attempt_columns
 
 
 def test_generator_output_ingests_through_source_boundary() -> None:

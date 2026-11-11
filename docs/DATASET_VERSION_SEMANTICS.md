@@ -25,7 +25,7 @@ legacy `GET /api/v1/metrics/overview` response remains a current-state view;
 `GET /api/v1/metrics/overview?dataset_version=<label-or-id>` returns immutable
 version metrics plus explicit scope metadata.
 
-No schema migration is required. The existing dataset-version foreign keys,
-snapshot uniqueness constraint, and ingestion-run relationship already support
-the corrected semantics. Individual quarantined payloads are not persisted;
+The B1 isolation correction required no migration. B2 adds a versioned
+full-source fingerprint and durable ingestion-attempt audit records while
+retaining these scopes. Individual quarantined payloads are not persisted;
 only their version-specific count is retained.

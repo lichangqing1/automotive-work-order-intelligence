@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import JSON, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy import JSON, DateTime, Float, ForeignKey, Index, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from .base import Base
@@ -24,6 +24,8 @@ class DatasetVersion(Base):
     version: Mapped[str] = mapped_column(String(32))
     row_count: Mapped[int] = mapped_column(Integer)
     content_hash: Mapped[str] = mapped_column(String(64))
+    source_content_hash: Mapped[str | None] = mapped_column(String(64))
+    source_hash_version: Mapped[str | None] = mapped_column(String(32))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     __table_args__ = (UniqueConstraint("dataset_id", "version"),)
 
@@ -38,6 +40,31 @@ class IngestionRun(Base):
     error: Mapped[str | None] = mapped_column(Text)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    __table_args__ = (Index("uq_ingestion_runs_dataset_version_id", "dataset_version_id", unique=True),)
+
+
+class IngestionAttempt(Base):
+    __tablename__ = "ingestion_attempts"
+    attempt_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    dataset_id: Mapped[str] = mapped_column(String(36), index=True)
+    dataset_version_reference: Mapped[str] = mapped_column(String(64), index=True)
+    dataset_version_id: Mapped[str | None] = mapped_column(String(36), index=True)
+    source_content_hash: Mapped[str] = mapped_column(String(64), index=True)
+    source_hash_version: Mapped[str] = mapped_column(String(32))
+    status: Mapped[str] = mapped_column(String(32), index=True)
+    failure_stage: Mapped[str | None] = mapped_column(String(64))
+    error_category: Mapped[str | None] = mapped_column(String(64))
+    sanitized_error: Mapped[str | None] = mapped_column(Text)
+    source_rows: Mapped[int] = mapped_column(Integer)
+    ingested_rows: Mapped[int] = mapped_column(Integer, default=0)
+    rejected_rows: Mapped[int] = mapped_column(Integer, default=0)
+    ingestion_run_id: Mapped[str | None] = mapped_column(String(36))
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    __table_args__ = (
+        Index("ix_ingestion_attempts_version_status", "dataset_version_reference", "status"),
+    )
 
 
 class Vehicle(Base):
