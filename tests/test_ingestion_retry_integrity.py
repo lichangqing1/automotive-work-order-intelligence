@@ -7,6 +7,7 @@ from pathlib import Path
 from threading import Barrier
 
 import pytest
+from conftest import TEST_AUTH_HEADERS
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, event, func, select
 from sqlalchemy.exc import SQLAlchemyError
@@ -288,7 +289,7 @@ def test_dataset_api_reports_retry_without_exposing_audit_errors(retry_engine) -
 
     app.dependency_overrides[database_session] = _session_override
     try:
-        with TestClient(app) as client:
+        with TestClient(app, headers=TEST_AUTH_HEADERS) as client:
             response = client.get("/api/v1/datasets/api-retry-v1")
     finally:
         if previous is None:

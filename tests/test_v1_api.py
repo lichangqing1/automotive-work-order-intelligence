@@ -1,3 +1,4 @@
+from conftest import TEST_AUTH_HEADERS
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import Session
@@ -34,7 +35,7 @@ def _session_override():
 
 
 app.dependency_overrides[database_session] = _session_override
-client = TestClient(app)
+client = TestClient(app, headers=TEST_AUTH_HEADERS)
 
 
 def test_liveness_contract() -> None:

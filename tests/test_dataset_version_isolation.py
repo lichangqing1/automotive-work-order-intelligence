@@ -5,6 +5,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
+from conftest import TEST_AUTH_HEADERS
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, event, func, select
 from sqlalchemy.exc import IntegrityError
@@ -133,7 +134,7 @@ def test_versioned_api_metrics_and_dataset_detail_match_database(isolation_engin
 
     app.dependency_overrides[database_session] = _session_override
     try:
-        with TestClient(app) as client:
+        with TestClient(app, headers=TEST_AUTH_HEADERS) as client:
             metrics = client.get("/api/v1/metrics/overview?dataset_version=api-versioned")
             by_id = client.get(f"/api/v1/metrics/overview?dataset_version={summary.ingestion.dataset_version_id}")
             detail = client.get("/api/v1/datasets/api-versioned")

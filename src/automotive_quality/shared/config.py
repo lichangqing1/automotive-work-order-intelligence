@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -24,6 +25,13 @@ class Settings(BaseSettings):
     jira_bug_issue_type: str = "Bug"
     jira_approved_statuses: str = "Approved,Done"
     jira_rejected_statuses: str = "Rejected"
+    api_auth_principals_json: str | None = None
+
+    @model_validator(mode="after")
+    def require_shared_environment_authentication(self) -> Settings:
+        if self.environment.lower() in {"shared", "staging", "production"} and not self.api_auth_principals_json:
+            raise ValueError("API authentication configuration is required in shared environments")
+        return self
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 

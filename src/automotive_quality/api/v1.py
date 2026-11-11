@@ -41,9 +41,10 @@ from automotive_quality.integrations.issue_tracker import IssueTracker, LocalIss
 from automotive_quality.integrations.jira import JiraIssueTracker
 from automotive_quality.shared.config import get_settings
 
+from .auth import authenticated_principal
 from .dependencies import database_session, retrieval_service
 
-router = APIRouter(prefix="/api/v1")
+router = APIRouter(prefix="/api/v1", dependencies=[Depends(authenticated_principal)])
 DatabaseSession = Annotated[Session, Depends(database_session)]
 Retrieval = Annotated[RetrievalService, Depends(retrieval_service)]
 

@@ -4,20 +4,19 @@ import json
 import os
 from pathlib import Path
 from urllib.error import HTTPError, URLError
-from urllib.request import Request, urlopen
 
 import pandas as pd
 import streamlit as st
 
+from automotive_quality.api.dashboard_client import ApiAuthenticationError, request_api
+
 API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000").rstrip("/")
+API_BEARER_TOKEN = os.getenv("API_BEARER_TOKEN")
 ROOT = Path(__file__).resolve().parents[1]
 
 
 def api(path: str, method: str = "GET", payload: dict[str, object] | None = None) -> object:
-    body = json.dumps(payload).encode() if payload is not None else None
-    request = Request(f"{API_BASE_URL}{path}", data=body, method=method, headers={"Content-Type": "application/json"})
-    with urlopen(request, timeout=15) as response:
-        return json.loads(response.read())
+    return request_api(API_BASE_URL, API_BEARER_TOKEN, path, method, payload)
 
 
 def published_ai_value_evidence() -> list[dict[str, object]]:
@@ -42,7 +41,7 @@ st.caption("FastAPI-backed quality, testing, retrieval, and AI workflows")
 
 try:
     metrics = api("/api/v1/metrics/overview")
-except (HTTPError, URLError, TimeoutError) as exc:
+except (ApiAuthenticationError, HTTPError, URLError, TimeoutError) as exc:
     st.error(f"Platform API unavailable at {API_BASE_URL}: {exc}")
     st.stop()
 

@@ -36,6 +36,7 @@ services:
       JIRA_EMAIL: ${JIRA_EMAIL:-}
       JIRA_API_TOKEN: ${JIRA_API_TOKEN:-}
       JIRA_PROJECT_KEY: ${JIRA_PROJECT_KEY:-QA}
+      API_AUTH_PRINCIPALS_JSON: ${API_AUTH_PRINCIPALS_JSON:-}
     command: sh -c "alembic upgrade head && uvicorn automotive_quality.api.main:app --host 0.0.0.0 --port 8000"
     ports: ["8000:8000"]
     depends_on:

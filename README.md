@@ -77,8 +77,14 @@ docker compose up --build
 Then open:
 
 - API documentation: `http://localhost:8000/docs`
-- Liveness: `http://localhost:8000/health/live`
-- Readiness: `http://localhost:8000/health/ready`
+- Liveness: `http://localhost:8000/health/live` (public and minimal)
+- Readiness: `http://localhost:8000/health/ready` (bearer authentication required)
+
+All `/api/v1` routes require bearer authentication. See
+[`docs/API_AUTHENTICATION.md`](docs/API_AUTHENTICATION.md) for secure token
+generation, digest-only API configuration, server-side dashboard configuration,
+and rotation. The legacy `automotive.api` compatibility app is not an approved
+shared or production entry point.
 
 ## Native development
 
@@ -118,8 +124,10 @@ streamlit run dashboard/app.py
 
 ```bash
 curl -X POST 'http://localhost:8000/api/v1/retrieval/search?top_k=5' \
+  -H "Authorization: Bearer $API_BEARER_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{
+    "dataset_version": "local-v1",
     "vehicle_model": "Model-X",
     "ota_version": "6.2.1",
     "description": "central display intermittently black after OTA",

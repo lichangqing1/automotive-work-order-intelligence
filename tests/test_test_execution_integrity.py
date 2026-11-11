@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 
 import pytest
+from conftest import TEST_AUTH_HEADERS
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, event, func, select
 from sqlalchemy.exc import SQLAlchemyError
@@ -371,7 +372,7 @@ def test_test_run_api_returns_consistent_validation_and_provenance(
 
     app.dependency_overrides[database_session] = _session_override
     try:
-        with TestClient(app) as client:
+        with TestClient(app, headers=TEST_AUTH_HEADERS) as client:
             invalid = client.post(
                 "/api/v1/test-runs",
                 json={

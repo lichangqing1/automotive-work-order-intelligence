@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 
 import pytest
+from conftest import TEST_AUTH_HEADERS
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
@@ -254,7 +255,7 @@ def api_client() -> Iterator[TestClient]:
     previous = app.dependency_overrides.get(database_session)
     app.dependency_overrides[database_session] = session_override
     try:
-        with TestClient(app) as client:
+        with TestClient(app, headers=TEST_AUTH_HEADERS) as client:
             yield client
     finally:
         if previous is None:
