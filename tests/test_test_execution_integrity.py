@@ -236,6 +236,105 @@ def test_complete_nonmatching_submitted_result_fails(
     assert result.actual == "observed failure"
 
 
+def test_invalid_rca_output_is_blocked_before_external_issue_sync(
+    execution_session: Session,
+) -> None:
+    provider = MockProvider({
+        AIRootCauseAnalysis: {
+            "failure_class": "TEST_FAILURE",
+            "probable_root_causes": ["submitted_result_mismatch"],
+            "supporting_evidence": ["EV-FABRICATED"],
+            "recommended_checks": ["Inspect submitted evidence"],
+            "confidence": 0.8,
+            "insufficient_evidence": False,
+            "claims": [{
+                "claim": "submitted_result_mismatch",
+                "evidence_ids": ["EV-FABRICATED"],
+            }],
+        },
+    })
+    tracker = LocalIssueTracker()
+    workflow = AITestingWorkflow(
+        execution_session,
+        AIWorkflowService(provider, AIRunRepository(execution_session)),
+        tracker,
+        {"Approved"},
+        {"Rejected"},
+    )
+
+    response = workflow.execute(
+        "REQV-EXEC",
+        ["TCV-ONE"],
+        {"TCV-ONE": "observed failure"},
+        "exec-v1",
+    )
+
+    assert response["status"] == "FAILED"
+    assert response["external_sync"] == ["FAILED"]
+    assert not [key for key in tracker.issues if key.startswith("BUG-")]
+    result = execution_session.scalar(
+        select(models.TestResult).where(models.TestResult.test_run_id == response["test_run_id"])
+    )
+    assert result is not None
+    assert result.rca_ai_run_id is None
+    successful_rca_runs = execution_session.scalars(
+        select(models.AIRun).where(
+            models.AIRun.task_type == "rca",
+            models.AIRun.status == "SUCCEEDED",
+        )
+    ).all()
+    assert successful_rca_runs == []
+
+
+def test_valid_rca_output_keeps_audit_and_external_traceability(
+    execution_session: Session,
+) -> None:
+    provider = MockProvider({
+        AIRootCauseAnalysis: {
+            "failure_class": "TEST_FAILURE",
+            "probable_root_causes": ["submitted_result_mismatch"],
+            "supporting_evidence": ["EV-ACTUAL"],
+            "recommended_checks": ["Inspect submitted evidence"],
+            "confidence": 0.8,
+            "insufficient_evidence": False,
+            "claims": [{
+                "claim": "submitted_result_mismatch",
+                "evidence_ids": ["EV-ACTUAL"],
+            }],
+        },
+    })
+    tracker = LocalIssueTracker()
+    workflow = AITestingWorkflow(
+        execution_session,
+        AIWorkflowService(provider, AIRunRepository(execution_session)),
+        tracker,
+        {"Approved"},
+        {"Rejected"},
+    )
+
+    response = workflow.execute(
+        "REQV-EXEC",
+        ["TCV-ONE"],
+        {"TCV-ONE": "observed failure"},
+        "exec-v1",
+    )
+
+    assert response["external_sync"] == ["SUCCEEDED"]
+    bug_key = next(key for key in tracker.issues if key.startswith("BUG-"))
+    comments = tracker.issues[bug_key]["comments"]
+    assert isinstance(comments, list)
+    assert "\"evidence_reference_status\": \"VALIDATED\"" in comments[0]
+    assert "\"review_status\": \"REVIEW_REQUIRED\"" in comments[0]
+    result = execution_session.scalar(
+        select(models.TestResult).where(models.TestResult.test_run_id == response["test_run_id"])
+    )
+    assert result is not None
+    ai_run = execution_session.get(models.AIRun, result.rca_ai_run_id)
+    assert ai_run is not None
+    assert ai_run.status == "SUCCEEDED"
+    assert ai_run.output["evidence_reference_status"] == "VALIDATED"
+
+
 def test_transaction_failure_rolls_back_run_and_results(
     workflow: AITestingWorkflow,
     execution_session: Session,

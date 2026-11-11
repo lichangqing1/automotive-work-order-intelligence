@@ -18,10 +18,15 @@ from automotive_quality.domains.ai.providers.openai import OpenAIProvider
 from automotive_quality.domains.ai.schemas import (
     AIRootCauseAnalysis,
     GeneratedTestSuite,
+    RCAEvidenceRequest,
     RequirementAnalysis,
     RuleDraft,
 )
-from automotive_quality.domains.ai.workflows import AIWorkflowService
+from automotive_quality.domains.ai.workflows import (
+    AIWorkflowService,
+    RCAEvidenceValidationError,
+    RCAProviderError,
+)
 from automotive_quality.domains.retrieval.models import SimilarCase
 from automotive_quality.domains.retrieval.service import RetrievalIndexNotReady, RetrievalService
 from automotive_quality.domains.testing.models import TestRun
@@ -48,7 +53,7 @@ class TestGenerationRequest(BaseModel):
 
 
 class RCARequest(BaseModel):
-    evidence: dict[str, object]
+    evidence: RCAEvidenceRequest | dict[str, object]
 
 
 class RetrievalRequest(WorkOrderInput):
@@ -215,7 +220,18 @@ def generate_dq_rule(request: RequirementRequest, session: DatabaseSession) -> R
 
 @router.post("/ai/rca/analyze", response_model=AIRootCauseAnalysis)
 def analyze_root_cause(request: RCARequest, session: DatabaseSession) -> AIRootCauseAnalysis:
-    return _ai_workflow(session).analyze_rca(request.evidence)
+    try:
+        return _ai_workflow(session).analyze_rca(request.evidence)
+    except RCAEvidenceValidationError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={"code": exc.code, "message": str(exc), "diagnostics": exc.diagnostics},
+        ) from exc
+    except RCAProviderError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail={"code": exc.code, "message": str(exc), "diagnostics": exc.diagnostics},
+        ) from exc
 
 
 @router.post("/requirements/import/jira")

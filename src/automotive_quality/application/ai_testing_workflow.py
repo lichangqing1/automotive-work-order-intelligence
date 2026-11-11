@@ -8,6 +8,7 @@ from uuid import uuid4
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from automotive_quality.domains.ai.schemas import RCAEvidenceItem, RCAEvidenceRequest
 from automotive_quality.domains.ai.workflows import AIWorkflowService
 from automotive_quality.infrastructure.database import models
 from automotive_quality.integrations.issue_tracker import IssueTracker
@@ -205,7 +206,21 @@ class AITestingWorkflow:
         for _version, result, _signature in failures:
             link = self.session.get(models.ExternalIssueLink, result.external_issue_link_id)
             assert link is not None
-            evidence = {"test_result_id": result.result_id, "test_run": run_id, "test_case_version": result.test_case_version_id, "dataset_version": dataset_version, "expected": result.expected, "actual": result.actual}
+            case_id = f"TEST-RESULT-{result.result_id}"
+            evidence = RCAEvidenceRequest(
+                case_id=case_id,
+                evidence_items=[
+                    RCAEvidenceItem(id="EV-TEST-RUN", content=run_id, case_id=case_id),
+                    RCAEvidenceItem(
+                        id="EV-TEST-CASE-VERSION",
+                        content=str(result.test_case_version_id),
+                        case_id=case_id,
+                    ),
+                    RCAEvidenceItem(id="EV-DATASET-VERSION", content=dataset_version, case_id=case_id),
+                    RCAEvidenceItem(id="EV-EXPECTED", content=result.expected, case_id=case_id),
+                    RCAEvidenceItem(id="EV-ACTUAL", content=result.actual, case_id=case_id),
+                ],
+            )
             try:
                 rca = self.ai.analyze_rca(evidence)
                 result.rca_ai_run_id = self.ai.last_run_id
