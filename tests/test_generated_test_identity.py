@@ -264,8 +264,13 @@ def test_generation_failure_rolls_back_all_prepared_records(identity_session: Se
     with pytest.raises(SQLAlchemyError, match="simulated generation persistence failure"):
         workflow.generate_tests("REQV-A")
 
-    for model in (models.TestCase, models.TestCaseVersion, models.ReviewRequest, models.ExternalIssueLink, models.AIRun):
+    for model in (models.TestCase, models.TestCaseVersion, models.ReviewRequest, models.ExternalIssueLink):
         assert identity_session.scalar(select(func.count()).select_from(model)) == 0
+    ai_run = identity_session.scalar(select(models.AIRun))
+    assert ai_run is not None
+    assert ai_run.status == "FAILED"
+    assert ai_run.failure_stage == "generated_test_persistence"
+    assert ai_run.output == {}
 
 
 def test_external_tracker_failure_preserves_drafts_and_retry_state(identity_session: Session) -> None:

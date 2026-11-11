@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import time
 from collections.abc import Callable
+from datetime import datetime, timezone
 from typing import Any, TypeVar
 from uuid import uuid4
 
@@ -52,6 +53,17 @@ class AIWorkflowService:
         self.prompts = prompt_registry or PromptRegistry()
         self.last_run_id: str | None = None
 
+    def mark_business_failure(self, stage: str, exc: Exception) -> None:
+        if self.repository is None or self.last_run_id is None:
+            return
+        self.repository.mark_failed(
+            self.last_run_id,
+            failure_stage=stage,
+            error_category="DATABASE_ERROR",
+            error_message=f"{type(exc).__name__}: workflow business persistence failed",
+            completed_at=datetime.now(timezone.utc),
+        )
+
     def _run(
         self,
         task: str,
@@ -65,18 +77,22 @@ class AIWorkflowService:
         start = time.perf_counter()
         run_id = f"AIR-{uuid4().hex[:12].upper()}"
         self.last_run_id = run_id
+        input_hash = hashlib.sha256(user_prompt.encode()).hexdigest()
+        correlation_id = hashlib.sha256(f"{task}|{input_hash}".encode()).hexdigest()
         try:
             result = self.provider.generate_structured(prompt=prompt, response_model=response_model)
             if result_validator:
                 result = result_validator(result)
         except Exception as exc:
             if self.repository:
+                failure_stage, error_category = _failure_classification(exc)
                 self.repository.save(
                     run_id=run_id, task_type=task, provider=self.provider.name, model=self.provider.model,
                     prompt_version=prompt_version, prompt_hash=template.content_hash,
-                    input_hash=hashlib.sha256(user_prompt.encode()).hexdigest(), output={},
+                    input_hash=input_hash, correlation_id=correlation_id, output={},
                     schema_valid=isinstance(exc, RCAProviderOutputError), status="FAILED",
-                    error_message=_safe_failure_message(exc),
+                    error_message=_safe_failure_message(exc), failure_stage=failure_stage,
+                    error_category=error_category, completed_at=datetime.now(timezone.utc),
                     latency_ms=(time.perf_counter() - start) * 1000,
                 )
             raise
@@ -84,8 +100,9 @@ class AIWorkflowService:
             self.repository.save(
                 run_id=run_id, task_type=task, provider=self.provider.name, model=self.provider.model,
                 prompt_version=prompt_version, prompt_hash=template.content_hash,
-                input_hash=hashlib.sha256(user_prompt.encode()).hexdigest(), output=result.model_dump(mode="json"),
+                input_hash=input_hash, correlation_id=correlation_id, output=result.model_dump(mode="json"),
                 schema_valid=True, status="SUCCEEDED", error_message=None,
+                failure_stage=None, error_category=None, completed_at=datetime.now(timezone.utc),
                 latency_ms=(time.perf_counter() - start) * 1000,
             )
         return result
@@ -225,3 +242,13 @@ def _safe_failure_message(exc: Exception) -> str:
     if isinstance(exc, RCAProviderError):
         return f"{exc.code}: {exc}"
     return f"{type(exc).__name__}: structured provider execution failed"
+
+
+def _failure_classification(exc: Exception) -> tuple[str, str]:
+    if isinstance(exc, (RCAProviderOutputError, ValidationError)):
+        return "provider_response_validation", "INVALID_PROVIDER_RESPONSE"
+    if isinstance(exc, TimeoutError):
+        return "provider_invocation", "PROVIDER_TIMEOUT"
+    if isinstance(exc, ConnectionError):
+        return "provider_invocation", "PROVIDER_CONNECTION"
+    return "provider_invocation", "PROVIDER_FAILURE"

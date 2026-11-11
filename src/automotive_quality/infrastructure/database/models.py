@@ -236,8 +236,12 @@ class AIRun(Base):
     schema_valid: Mapped[bool]
     status: Mapped[str] = mapped_column(String(24), default="SUCCEEDED")
     error_message: Mapped[str | None] = mapped_column(Text)
+    failure_stage: Mapped[str | None] = mapped_column(String(64))
+    error_category: Mapped[str | None] = mapped_column(String(64))
+    correlation_id: Mapped[str | None] = mapped_column(String(64), index=True)
     latency_ms: Mapped[float] = mapped_column(Float)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class RequirementVersion(Base):

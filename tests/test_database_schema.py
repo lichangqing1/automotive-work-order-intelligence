@@ -20,6 +20,8 @@ def test_complete_schema_can_be_created_from_metadata() -> None:
     assert {"source_content_hash", "source_hash_version"} <= dataset_version_columns
     attempt_columns = {item["name"] for item in inspect(engine).get_columns("ingestion_attempts")}
     assert {"attempt_id", "dataset_version_reference", "status", "failure_stage", "error_category", "sanitized_error"} <= attempt_columns
+    ai_run_columns = {item["name"] for item in inspect(engine).get_columns("ai_runs")}
+    assert {"failure_stage", "error_category", "correlation_id", "completed_at"} <= ai_run_columns
 
 
 def test_generator_output_ingests_through_source_boundary() -> None:

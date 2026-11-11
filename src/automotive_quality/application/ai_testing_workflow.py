@@ -46,9 +46,14 @@ class AITestingWorkflow:
     def analyze(self, requirement_version_id: str) -> dict:
         requirement = self._requirement(requirement_version_id)
         result = self.ai.analyze_requirement(f"{requirement.summary}\n{requirement.description}")
-        requirement.analysis = result.model_dump(mode="json")
-        requirement.analysis_ai_run_id = self.ai.last_run_id
-        self.session.flush()
+        try:
+            requirement.analysis = result.model_dump(mode="json")
+            requirement.analysis_ai_run_id = self.ai.last_run_id
+            self.session.flush()
+        except Exception as exc:
+            self.session.rollback()
+            self.ai.mark_business_failure("requirement_analysis_persistence", exc)
+            raise
         return {"requirement_version_id": requirement_version_id, "ai_run_id": self.ai.last_run_id, "analysis": requirement.analysis}
 
     def generate_tests(self, requirement_version_id: str) -> dict:
@@ -109,8 +114,9 @@ class AITestingWorkflow:
             link = models.ExternalIssueLink(provider=self.tracker.name, issue_key=None, issue_url=None, artifact_type="REVIEW", artifact_id=review_id, idempotency_key=f"review:{review_id}", sync_status="PENDING", retry_count=0)
             self.session.add(link)
             self.session.commit()  # Drafts and review survive an external tracker outage.
-        except Exception:
+        except Exception as exc:
             self.session.rollback()
+            self.ai.mark_business_failure("generated_test_persistence", exc)
             raise
         self._sync_link(link)
         return {"generation_run_id": ai_run_id, "generated": len(suite.cases), "accepted_for_review": len(version_ids), "rejected_by_validation": rejected, "review_id": review_id, "issue_key": link.issue_key, "sync_status": link.sync_status, "test_case_ids": case_ids, "test_case_version_ids": version_ids, "provider_test_ids": provider_test_ids}
