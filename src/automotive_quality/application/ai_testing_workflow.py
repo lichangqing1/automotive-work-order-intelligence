@@ -5,7 +5,7 @@ import json
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from automotive_quality.domains.ai.schemas import RCAEvidenceItem, RCAEvidenceRequest
@@ -60,34 +60,60 @@ class AITestingWorkflow:
         suite = self.ai.generate_tests(requirement.description, RequirementAnalysis.model_validate(requirement.analysis))
         ai_run_id = self.ai.last_run_id
         seen: set[str] = set()
+        case_ids: list[str] = []
         version_ids: list[str] = []
+        provider_test_ids: list[str] = []
         rejected = 0
-        for case in suite.cases:
-            signature = case.title.strip().casefold()
-            if signature in seen or not case.steps or not case.expected_result.strip():
-                rejected += 1
-                continue
-            seen.add(signature)
-            case_id = case.test_id
-            parent = self.session.get(models.TestCase, case_id)
-            if parent is None:
-                parent = models.TestCase(test_case_id=case_id, suite=f"REQ-{requirement.external_reference}", title=case.title, severity=case.priority, specification=case.model_dump(mode="json"), review_status="REVIEW_REQUIRED")
+        try:
+            for case in suite.cases:
+                signature = case.title.strip().casefold()
+                if signature in seen or not case.steps or not case.expected_result.strip():
+                    rejected += 1
+                    continue
+                seen.add(signature)
+
+                # Provider test IDs are untrusted display metadata. Each generated
+                # occurrence is a new artifact; the platform owns persistent IDs.
+                case_id = f"TC-{uuid4().hex.upper()}"
+                version_id = f"TCV-{uuid4().hex.upper()}"
+                content = case.model_dump(mode="json")
+                content["provider_test_id"] = case.test_id
+                content["platform_test_case_id"] = case_id
+                parent = models.TestCase(
+                    test_case_id=case_id,
+                    suite=f"REQ-{requirement.external_reference}",
+                    title=case.title,
+                    severity=case.priority,
+                    specification=content,
+                    review_status="REVIEW_REQUIRED",
+                )
                 self.session.add(parent)
-            version_number = int(self.session.scalar(select(func.max(models.TestCaseVersion.version)).where(models.TestCaseVersion.test_case_id == case_id)) or 0) + 1
-            version_id = f"TCV-{uuid4().hex[:12].upper()}"
-            self.session.add(models.TestCaseVersion(test_case_version_id=version_id, test_case_id=case_id, version=version_number, requirement_version_id=requirement_version_id, source_ai_run_id=ai_run_id, status="REVIEW_REQUIRED", content=case.model_dump(mode="json")))
-            version_ids.append(version_id)
-        if not version_ids:
-            raise WorkflowConflict("AI output contained no reviewable test cases")
-        review_id = f"REV-{uuid4().hex[:12].upper()}"
-        review = models.ReviewRequest(review_id=review_id, artifact_type="TEST_CASE_BATCH", artifact_ids=version_ids, status="REVIEW_REQUIRED", external_system=self.tracker.name)
-        self.session.add(review)
-        self.session.flush()
-        link = models.ExternalIssueLink(provider=self.tracker.name, issue_key=None, issue_url=None, artifact_type="REVIEW", artifact_id=review_id, idempotency_key=f"review:{review_id}", sync_status="PENDING", retry_count=0)
-        self.session.add(link)
-        self.session.commit()  # Drafts and review survive an external tracker outage.
+                self.session.add(models.TestCaseVersion(
+                    test_case_version_id=version_id,
+                    test_case_id=case_id,
+                    version=1,
+                    requirement_version_id=requirement_version_id,
+                    source_ai_run_id=ai_run_id,
+                    status="REVIEW_REQUIRED",
+                    content=content,
+                ))
+                case_ids.append(case_id)
+                version_ids.append(version_id)
+                provider_test_ids.append(case.test_id)
+            if not version_ids:
+                raise WorkflowConflict("AI output contained no reviewable test cases")
+            review_id = f"REV-{uuid4().hex[:12].upper()}"
+            review = models.ReviewRequest(review_id=review_id, artifact_type="TEST_CASE_BATCH", artifact_ids=version_ids, status="REVIEW_REQUIRED", external_system=self.tracker.name)
+            self.session.add(review)
+            self.session.flush()
+            link = models.ExternalIssueLink(provider=self.tracker.name, issue_key=None, issue_url=None, artifact_type="REVIEW", artifact_id=review_id, idempotency_key=f"review:{review_id}", sync_status="PENDING", retry_count=0)
+            self.session.add(link)
+            self.session.commit()  # Drafts and review survive an external tracker outage.
+        except Exception:
+            self.session.rollback()
+            raise
         self._sync_link(link)
-        return {"generation_run_id": ai_run_id, "generated": len(suite.cases), "accepted_for_review": len(version_ids), "rejected_by_validation": rejected, "review_id": review_id, "issue_key": link.issue_key, "sync_status": link.sync_status, "test_case_version_ids": version_ids}
+        return {"generation_run_id": ai_run_id, "generated": len(suite.cases), "accepted_for_review": len(version_ids), "rejected_by_validation": rejected, "review_id": review_id, "issue_key": link.issue_key, "sync_status": link.sync_status, "test_case_ids": case_ids, "test_case_version_ids": version_ids, "provider_test_ids": provider_test_ids}
 
     def sync_review(self, review_id: str) -> models.ReviewRequest:
         review = self.session.get(models.ReviewRequest, review_id)
@@ -265,7 +291,7 @@ class AITestingWorkflow:
         links = self.session.scalars(select(models.ExternalIssueLink).where((models.ExternalIssueLink.link_id.in_(link_ids)) | ((models.ExternalIssueLink.artifact_type == "REVIEW") & (models.ExternalIssueLink.artifact_id.in_(review_ids))))).all() if link_ids or review_ids else []
         rca_ids = {result.rca_ai_run_id for result in results if result.rca_ai_run_id}
         rca_runs = self.session.scalars(select(models.AIRun).where(models.AIRun.run_id.in_(rca_ids))).all() if rca_ids else []
-        return {"requirement": {"id": requirement_version_id, "external_reference": requirement.external_reference, "version": requirement.version, "analysis_ai_run_id": requirement.analysis_ai_run_id}, "test_case_versions": [{"id": item.test_case_version_id, "test_case_id": item.test_case_id, "status": item.status, "source_ai_run_id": item.source_ai_run_id} for item in versions], "reviews": [{"id": item.review_id, "status": item.status} for item in linked_reviews], "test_runs": [{"id": item.test_run_id, "status": item.status, "dataset_version": item.environment} for item in runs], "test_results": [{"id": item.result_id, "test_run_id": item.test_run_id, "test_case_version_id": item.test_case_version_id, "status": item.status, "rca_ai_run_id": item.rca_ai_run_id, "external_issue_link_id": item.external_issue_link_id} for item in results], "rca_ai_runs": [{"id": item.run_id, "prompt_version": item.prompt_version, "model": item.model, "provider": item.provider} for item in rca_runs], "external_issues": [{"link_id": item.link_id, "issue_key": item.issue_key, "artifact_type": item.artifact_type, "artifact_id": item.artifact_id, "sync_status": item.sync_status} for item in links]}
+        return {"requirement": {"id": requirement_version_id, "external_reference": requirement.external_reference, "version": requirement.version, "analysis_ai_run_id": requirement.analysis_ai_run_id}, "test_case_versions": [{"id": item.test_case_version_id, "test_case_id": item.test_case_id, "provider_test_id": item.content.get("provider_test_id", item.content.get("test_id")), "status": item.status, "source_ai_run_id": item.source_ai_run_id} for item in versions], "reviews": [{"id": item.review_id, "status": item.status} for item in linked_reviews], "test_runs": [{"id": item.test_run_id, "status": item.status, "dataset_version": item.environment} for item in runs], "test_results": [{"id": item.result_id, "test_run_id": item.test_run_id, "test_case_id": item.test_case_id, "test_case_version_id": item.test_case_version_id, "status": item.status, "rca_ai_run_id": item.rca_ai_run_id, "external_issue_link_id": item.external_issue_link_id} for item in results], "rca_ai_runs": [{"id": item.run_id, "prompt_version": item.prompt_version, "model": item.model, "provider": item.provider} for item in rca_runs], "external_issues": [{"link_id": item.link_id, "issue_key": item.issue_key, "artifact_type": item.artifact_type, "artifact_id": item.artifact_id, "sync_status": item.sync_status} for item in links]}
 
     def retry_external_sync(self, link_id: int) -> models.ExternalIssueLink:
         link = self.session.get(models.ExternalIssueLink, link_id)
