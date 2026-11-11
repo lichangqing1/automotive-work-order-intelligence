@@ -41,12 +41,28 @@ from automotive_quality.integrations.issue_tracker import IssueTracker, LocalIss
 from automotive_quality.integrations.jira import JiraIssueTracker
 from automotive_quality.shared.config import get_settings
 
-from .auth import authenticated_principal
+from .auth import AuthenticatedPrincipal, authenticated_principal
+from .authorization import Permission, require_permission
 from .dependencies import database_session, retrieval_service
 
 router = APIRouter(prefix="/api/v1", dependencies=[Depends(authenticated_principal)])
 DatabaseSession = Annotated[Session, Depends(database_session)]
 Retrieval = Annotated[RetrievalService, Depends(retrieval_service)]
+Reader = Annotated[AuthenticatedPrincipal, Depends(require_permission(Permission.READ))]
+AIController = Annotated[AuthenticatedPrincipal, Depends(require_permission(Permission.OPERATE_AI))]
+RequirementOperator = Annotated[
+    AuthenticatedPrincipal,
+    Depends(require_permission(Permission.OPERATE_REQUIREMENTS)),
+]
+TestSubmitter = Annotated[
+    AuthenticatedPrincipal,
+    Depends(require_permission(Permission.SUBMIT_TEST_RESULTS)),
+]
+Reviewer = Annotated[AuthenticatedPrincipal, Depends(require_permission(Permission.REVIEW))]
+SyncOperator = Annotated[
+    AuthenticatedPrincipal,
+    Depends(require_permission(Permission.RETRY_EXTERNAL_SYNC)),
+]
 
 
 class RequirementRequest(BaseModel):
@@ -91,7 +107,7 @@ class TestRunResponse(BaseModel):
 
 class ReviewDecisionRequest(BaseModel):
     status: str
-    reviewer: str
+    reviewer: str | None = None
     comment: str | None = None
 
 
@@ -145,8 +161,44 @@ def _query(case: WorkOrderInput) -> str:
     return " ".join(filter(None, [case.error_code, case.description, case.ota_version]))
 
 
+def _bind_reviewer(
+    session: Session,
+    review_id: str,
+    principal: AuthenticatedPrincipal,
+    *,
+    claimed_reviewer: str | None = None,
+) -> database_models.ReviewRequest:
+    review = session.scalar(
+        select(database_models.ReviewRequest)
+        .where(database_models.ReviewRequest.review_id == review_id)
+        .with_for_update()
+    )
+    if review is None:
+        raise HTTPException(status_code=404, detail="Review not found")
+    if claimed_reviewer is not None and claimed_reviewer != principal.principal_id:
+        raise HTTPException(status_code=409, detail="Reviewer identity must match the authenticated principal")
+    if review.reviewer is not None and review.reviewer != principal.principal_id:
+        raise HTTPException(status_code=403, detail="Review is assigned to a different authenticated principal")
+    versions = [session.get(database_models.TestCaseVersion, artifact_id) for artifact_id in review.artifact_ids]
+    if review.artifact_type != "TEST_CASE_BATCH" or not versions or any(version is None for version in versions):
+        raise HTTPException(status_code=409, detail="Review artifact relationships are invalid")
+    typed_versions = [version for version in versions if version is not None]
+    requirement_ids = {version.requirement_version_id for version in typed_versions}
+    if len(requirement_ids) != 1:
+        raise HTTPException(status_code=409, detail="Review artifacts must belong to one requirement version")
+    is_administrator = "administrator" in principal.roles
+    generators = {version.generated_by_principal_id for version in typed_versions}
+    if None in generators and not is_administrator:
+        raise HTTPException(status_code=403, detail="Unattributed historical reviews require an administrator")
+    if principal.principal_id in generators and not is_administrator:
+        raise HTTPException(status_code=403, detail="A principal cannot review its own generated output")
+    review.reviewer = principal.principal_id
+    session.flush()
+    return review
+
+
 @router.post("/retrieval/search", response_model=list[SimilarCase])
-def search(case: RetrievalRequest, service: Retrieval, top_k: int = Query(5, ge=1, le=20)) -> list[SimilarCase]:
+def search(case: RetrievalRequest, _principal: Reader, service: Retrieval, top_k: int = Query(5, ge=1, le=20)) -> list[SimilarCase]:
     try:
         return service.search(case.dataset_version, _query(case), top_k=top_k)
     except RetrievalIndexNotReady as exc:
@@ -154,7 +206,7 @@ def search(case: RetrievalRequest, service: Retrieval, top_k: int = Query(5, ge=
 
 
 @router.post("/baselines/ai/resolution", response_model=ResolutionResponse)
-def resolution(case: RetrievalRequest, service: Retrieval, top_k: int = Query(5, ge=1, le=20)) -> ResolutionResponse:
+def resolution(case: RetrievalRequest, _principal: AIController, service: Retrieval, top_k: int = Query(5, ge=1, le=20)) -> ResolutionResponse:
     try:
         similar = service.search(case.dataset_version, _query(case), top_k=top_k)
     except RetrievalIndexNotReady as exc:
@@ -163,7 +215,7 @@ def resolution(case: RetrievalRequest, service: Retrieval, top_k: int = Query(5,
 
 
 @router.post("/baselines/ai/rca", response_model=RCAResult)
-def rca(case: RetrievalRequest, service: Retrieval, top_k: int = Query(5, ge=1, le=20)) -> RCAResult:
+def rca(case: RetrievalRequest, _principal: AIController, service: Retrieval, top_k: int = Query(5, ge=1, le=20)) -> RCAResult:
     try:
         similar = service.search(case.dataset_version, _query(case), top_k=top_k)
     except RetrievalIndexNotReady as exc:
@@ -172,17 +224,17 @@ def rca(case: RetrievalRequest, service: Retrieval, top_k: int = Query(5, ge=1, 
 
 
 @router.post("/baselines/dq/rules/draft", response_model=DQRuleSpec)
-def draft_rule(requirement: str = Query(min_length=5)) -> DQRuleSpec:
+def draft_rule(_principal: AIController, requirement: str = Query(min_length=5)) -> DQRuleSpec:
     return generate_rule(requirement)
 
 
 @router.get("/test-runs", response_model=list[TestRun])
-def list_test_runs(session: DatabaseSession) -> list[TestRun]:
+def list_test_runs(_principal: Reader, session: DatabaseSession) -> list[TestRun]:
     return PostgresTestRunRepository(session).list()
 
 
 @router.get("/test-runs/{run_id}", response_model=TestRun)
-def get_test_run(run_id: str, session: DatabaseSession) -> TestRun:
+def get_test_run(run_id: str, _principal: Reader, session: DatabaseSession) -> TestRun:
     run = PostgresTestRunRepository(session).get(run_id)
     if not run:
         raise HTTPException(status_code=404, detail="Test run not found")
@@ -190,7 +242,7 @@ def get_test_run(run_id: str, session: DatabaseSession) -> TestRun:
 
 
 @router.get("/metrics/overview")
-def overview(session: DatabaseSession, dataset_version: str | None = None) -> dict[str, object]:
+def overview(_principal: Reader, session: DatabaseSession, dataset_version: str | None = None) -> dict[str, object]:
     try:
         return database_kpis(session, dataset_version)
     except UnknownDatasetVersion as exc:
@@ -200,13 +252,13 @@ def overview(session: DatabaseSession, dataset_version: str | None = None) -> di
 
 
 @router.get("/datasets")
-def list_datasets(session: DatabaseSession) -> list[dict[str, object]]:
+def list_datasets(_principal: Reader, session: DatabaseSession) -> list[dict[str, object]]:
     versions = session.scalars(select(database_models.DatasetVersion).order_by(database_models.DatasetVersion.created_at.desc())).all()
     return [{"dataset_version_id": item.dataset_version_id, "dataset_id": item.dataset_id, "version": item.version, "row_count": item.row_count, "content_hash": item.content_hash, "created_at": item.created_at} for item in versions]
 
 
 @router.get("/datasets/{version}")
-def get_dataset(version: str, session: DatabaseSession) -> dict[str, object]:
+def get_dataset(version: str, _principal: Reader, session: DatabaseSession) -> dict[str, object]:
     try:
         item = resolve_dataset_version(session, version)
     except UnknownDatasetVersion:
@@ -229,22 +281,22 @@ def get_dataset(version: str, session: DatabaseSession) -> dict[str, object]:
 
 
 @router.post("/ai/requirements/analyze", response_model=RequirementAnalysis)
-def analyze_requirement(request: RequirementRequest, session: DatabaseSession) -> RequirementAnalysis:
+def analyze_requirement(request: RequirementRequest, _principal: AIController, session: DatabaseSession) -> RequirementAnalysis:
     return _ai_workflow(session).analyze_requirement(request.requirement)
 
 
 @router.post("/ai/tests/generate", response_model=GeneratedTestSuite)
-def generate_tests(request: TestGenerationRequest, session: DatabaseSession) -> GeneratedTestSuite:
+def generate_tests(request: TestGenerationRequest, _principal: AIController, session: DatabaseSession) -> GeneratedTestSuite:
     return _ai_workflow(session).generate_tests(request.requirement, request.analysis)
 
 
 @router.post("/ai/dq-rules/generate", response_model=RuleDraft)
-def generate_dq_rule(request: RequirementRequest, session: DatabaseSession) -> RuleDraft:
+def generate_dq_rule(request: RequirementRequest, _principal: AIController, session: DatabaseSession) -> RuleDraft:
     return _ai_workflow(session).generate_rule(request.requirement)
 
 
 @router.post("/ai/rca/analyze", response_model=AIRootCauseAnalysis)
-def analyze_root_cause(request: RCARequest, session: DatabaseSession) -> AIRootCauseAnalysis:
+def analyze_root_cause(request: RCARequest, _principal: AIController, session: DatabaseSession) -> AIRootCauseAnalysis:
     try:
         return _ai_workflow(session).analyze_rca(request.evidence)
     except RCAEvidenceValidationError as exc:
@@ -260,13 +312,13 @@ def analyze_root_cause(request: RCARequest, session: DatabaseSession) -> AIRootC
 
 
 @router.post("/requirements/import/jira")
-def import_jira_requirement(request: JiraImportRequest, session: DatabaseSession) -> dict[str, object]:
-    record = _testing_workflow(session).import_requirement(request.issue_key)
+def import_jira_requirement(request: JiraImportRequest, principal: RequirementOperator, session: DatabaseSession) -> dict[str, object]:
+    record = _testing_workflow(session).import_requirement(request.issue_key, actor_principal_id=principal.principal_id)
     return {"requirement_version_id": record.requirement_version_id, "requirement_id": record.requirement_id, "version": record.version, "external_reference": record.external_reference}
 
 
 @router.post("/requirements/{requirement_version_id}/analyze")
-def analyze_persisted_requirement(requirement_version_id: str, session: DatabaseSession) -> dict:
+def analyze_persisted_requirement(requirement_version_id: str, _principal: RequirementOperator, session: DatabaseSession) -> dict:
     try:
         return _testing_workflow(session).analyze(requirement_version_id)
     except KeyError as exc:
@@ -274,9 +326,12 @@ def analyze_persisted_requirement(requirement_version_id: str, session: Database
 
 
 @router.post("/requirements/{requirement_version_id}/generate-tests")
-def generate_persisted_tests(requirement_version_id: str, session: DatabaseSession) -> dict:
+def generate_persisted_tests(requirement_version_id: str, principal: RequirementOperator, session: DatabaseSession) -> dict:
     try:
-        return _testing_workflow(session).generate_tests(requirement_version_id)
+        return _testing_workflow(session).generate_tests(
+            requirement_version_id,
+            actor_principal_id=principal.principal_id,
+        )
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Requirement version not found") from exc
     except WorkflowConflict as exc:
@@ -284,7 +339,7 @@ def generate_persisted_tests(requirement_version_id: str, session: DatabaseSessi
 
 
 @router.get("/reviews/{review_id}")
-def get_review(review_id: str, session: DatabaseSession) -> dict[str, object]:
+def get_review(review_id: str, _principal: Reader, session: DatabaseSession) -> dict[str, object]:
     review = session.get(database_models.ReviewRequest, review_id)
     if review is None:
         raise HTTPException(status_code=404, detail="Review not found")
@@ -293,19 +348,20 @@ def get_review(review_id: str, session: DatabaseSession) -> dict[str, object]:
 
 
 @router.post("/reviews/{review_id}/sync")
-def sync_review(review_id: str, session: DatabaseSession) -> dict[str, object]:
+def sync_review(review_id: str, principal: Reviewer, session: DatabaseSession) -> dict[str, object]:
     try:
+        _bind_reviewer(session, review_id, principal)
         review = _testing_workflow(session).sync_review(review_id)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Review not found") from exc
+    except WorkflowConflict as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     return {"review_id": review.review_id, "status": review.status, "artifact_ids": review.artifact_ids}
 
 
 @router.post("/reviews/{review_id}/start")
-def start_review(review_id: str, session: DatabaseSession) -> dict[str, object]:
-    review = session.get(database_models.ReviewRequest, review_id)
-    if review is None:
-        raise HTTPException(status_code=404, detail="Review not found")
+def start_review(review_id: str, principal: Reviewer, session: DatabaseSession) -> dict[str, object]:
+    review = _bind_reviewer(session, review_id, principal)
     review.review_started_at = datetime.now(timezone.utc)
     review.active_review_seconds = None
     session.flush()
@@ -313,10 +369,8 @@ def start_review(review_id: str, session: DatabaseSession) -> dict[str, object]:
 
 
 @router.post("/reviews/{review_id}/assessment")
-def complete_review_assessment(review_id: str, request: ReviewAssessmentRequest, session: DatabaseSession) -> dict[str, object]:
-    review = session.get(database_models.ReviewRequest, review_id)
-    if review is None:
-        raise HTTPException(status_code=404, detail="Review not found")
+def complete_review_assessment(review_id: str, request: ReviewAssessmentRequest, principal: Reviewer, session: DatabaseSession) -> dict[str, object]:
+    review = _bind_reviewer(session, review_id, principal)
     if review.review_started_at is None:
         raise HTTPException(status_code=409, detail="Review timing has not been started")
     completed_at = datetime.now(timezone.utc)
@@ -337,34 +391,37 @@ def complete_review_assessment(review_id: str, request: ReviewAssessmentRequest,
 
 
 @router.post("/reviews/{review_id}/decision")
-def decide_local_review(review_id: str, request: ReviewDecisionRequest, session: DatabaseSession) -> dict[str, object]:
+def decide_local_review(review_id: str, request: ReviewDecisionRequest, principal: Reviewer, session: DatabaseSession) -> dict[str, object]:
+    review = _bind_reviewer(session, review_id, principal, claimed_reviewer=request.reviewer)
     tracker = _issue_tracker()
     if not isinstance(tracker, LocalIssueTracker):
         raise HTTPException(status_code=409, detail="Review decisions must be made in the configured external issue tracker")
-    review = session.get(database_models.ReviewRequest, review_id)
-    if review is None:
-        raise HTTPException(status_code=404, detail="Review not found")
     link = session.scalar(select(database_models.ExternalIssueLink).where(database_models.ExternalIssueLink.artifact_type == "REVIEW", database_models.ExternalIssueLink.artifact_id == review_id))
     if link is None:
         raise HTTPException(status_code=409, detail="Review has no issue link")
     tracker.set_issue_status(link.issue_key, request.status)
-    review.reviewer = request.reviewer
     review.review_comment = request.comment
     synced = _testing_workflow(session).sync_review(review_id)
     return {"review_id": synced.review_id, "status": synced.status, "artifact_ids": synced.artifact_ids}
 
 
 @router.post("/test-runs", response_model=TestRunResponse)
-def launch_test_run(request: TestRunRequest, session: DatabaseSession) -> dict:
+def launch_test_run(request: TestRunRequest, principal: TestSubmitter, session: DatabaseSession) -> dict:
     """Validate complete caller-submitted results; this does not execute test steps."""
     try:
-        return _testing_workflow(session).execute(request.requirement_version_id, request.test_case_version_ids, request.actuals, request.dataset_version)
+        return _testing_workflow(session).execute(
+            request.requirement_version_id,
+            request.test_case_version_ids,
+            request.actuals,
+            request.dataset_version,
+            actor_principal_id=principal.principal_id,
+        )
     except WorkflowConflict as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @router.get("/traceability/requirements/{requirement_version_id}")
-def requirement_traceability(requirement_version_id: str, session: DatabaseSession) -> dict:
+def requirement_traceability(requirement_version_id: str, _principal: Reader, session: DatabaseSession) -> dict:
     try:
         return _testing_workflow(session).traceability(requirement_version_id)
     except KeyError as exc:
@@ -372,7 +429,7 @@ def requirement_traceability(requirement_version_id: str, session: DatabaseSessi
 
 
 @router.get("/ai-value/experiments")
-def list_ai_value_experiments(session: DatabaseSession) -> list[dict[str, object]]:
+def list_ai_value_experiments(_principal: Reader, session: DatabaseSession) -> list[dict[str, object]]:
     runs = session.scalars(select(database_models.EvaluationRun).order_by(database_models.EvaluationRun.created_at.desc())).all()
     return [{
         "experiment_id": run.evaluation_run_id, "experiment": run.experiment_group,
@@ -383,9 +440,14 @@ def list_ai_value_experiments(session: DatabaseSession) -> list[dict[str, object
 
 
 @router.post("/external-sync/{link_id}/retry")
-def retry_external_sync(link_id: int, session: DatabaseSession) -> dict[str, object]:
+def retry_external_sync(link_id: int, principal: SyncOperator, session: DatabaseSession) -> dict[str, object]:
     try:
-        link = _testing_workflow(session).retry_external_sync(link_id)
+        link = _testing_workflow(session).retry_external_sync(
+            link_id,
+            actor_principal_id=principal.principal_id,
+        )
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="External sync record not found") from exc
+    except WorkflowConflict as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     return {"link_id": link.link_id, "issue_key": link.issue_key, "sync_status": link.sync_status, "sync_error": link.sync_error, "retry_count": link.retry_count}

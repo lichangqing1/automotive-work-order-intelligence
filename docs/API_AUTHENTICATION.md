@@ -40,8 +40,8 @@ as `Authorization: Bearer <token>`. Never place the raw token in URLs, browser
 JavaScript, Docker images, committed `.env` files, or diagnostic output.
 
 Principal IDs and key IDs are stable, non-secret audit identifiers. Roles are
-carried in the authenticated principal for Phase C1.3 authorization; this phase
-does not yet enforce role-specific access.
+enforced through the explicit permission matrix documented in
+[API authorization](API_AUTHORIZATION.md).
 
 ## Rotation
 

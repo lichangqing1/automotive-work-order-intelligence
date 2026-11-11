@@ -26,7 +26,11 @@ class AITestingWorkflow:
         self.approved_statuses = {value.casefold() for value in approved_statuses}
         self.rejected_statuses = {value.casefold() for value in rejected_statuses}
 
-    def import_requirement(self, issue_key: str) -> models.RequirementVersion:
+    def import_requirement(
+        self,
+        issue_key: str,
+        actor_principal_id: str | None = None,
+    ) -> models.RequirementVersion:
         issue = self.tracker.get_issue(issue_key)
         content = f"{issue['summary']}\n{issue['description']}"
         content_hash = hashlib.sha256(content.encode()).hexdigest()
@@ -38,6 +42,7 @@ class AITestingWorkflow:
             requirement_version_id=f"REQV-{uuid4().hex[:12].upper()}", requirement_id=f"REQ-{issue_key}", version=version,
             external_system=self.tracker.name, external_reference=issue_key, summary=issue["summary"],
             description=issue["description"], acceptance_criteria=issue["description"], content_hash=content_hash,
+            created_by_principal_id=actor_principal_id,
         )
         self.session.add(record)
         self.session.flush()
@@ -56,7 +61,11 @@ class AITestingWorkflow:
             raise
         return {"requirement_version_id": requirement_version_id, "ai_run_id": self.ai.last_run_id, "analysis": requirement.analysis}
 
-    def generate_tests(self, requirement_version_id: str) -> dict:
+    def generate_tests(
+        self,
+        requirement_version_id: str,
+        actor_principal_id: str | None = None,
+    ) -> dict:
         requirement = self._requirement(requirement_version_id)
         if requirement.analysis is None:
             self.analyze(requirement_version_id)
@@ -99,6 +108,7 @@ class AITestingWorkflow:
                     version=1,
                     requirement_version_id=requirement_version_id,
                     source_ai_run_id=ai_run_id,
+                    generated_by_principal_id=actor_principal_id,
                     status="REVIEW_REQUIRED",
                     content=content,
                 ))
@@ -145,7 +155,14 @@ class AITestingWorkflow:
         self.session.flush()
         return review
 
-    def execute(self, requirement_version_id: str, test_case_version_ids: list[str], actuals: dict[str, str], dataset_version: str) -> dict:
+    def execute(
+        self,
+        requirement_version_id: str,
+        test_case_version_ids: list[str],
+        actuals: dict[str, str],
+        dataset_version: str,
+        actor_principal_id: str | None = None,
+    ) -> dict:
         if not test_case_version_ids:
             raise WorkflowConflict("At least one test-case version is required")
         requested_ids = set(test_case_version_ids)
@@ -175,7 +192,14 @@ class AITestingWorkflow:
             raise WorkflowConflict("Only APPROVED test-case versions are executable")
         run_id = f"TR-{uuid4().hex[:12].upper()}"
         now = datetime.now(timezone.utc)
-        run = models.TestRun(test_run_id=run_id, suite=f"REQ-{requirement_version_id}", environment=dataset_version, status="RUNNING", started_at=now)
+        run = models.TestRun(
+            test_run_id=run_id,
+            suite=f"REQ-{requirement_version_id}",
+            environment=dataset_version,
+            status="RUNNING",
+            started_at=now,
+            submitted_by_principal_id=actor_principal_id,
+        )
         failures: list[tuple[models.TestCaseVersion, models.TestResult, str]] = []
         try:
             self.session.add(run)
@@ -201,6 +225,7 @@ class AITestingWorkflow:
                         "dataset_version_id": verified_dataset.dataset_version_id,
                         "execution_mode": "SUBMITTED_RESULTS_VALIDATION",
                         "result_source": "CALLER_SUBMITTED",
+                        "submitted_by_principal_id": actor_principal_id,
                     },
                 )
                 self.session.add(result)
@@ -299,10 +324,27 @@ class AITestingWorkflow:
         rca_runs = self.session.scalars(select(models.AIRun).where(models.AIRun.run_id.in_(rca_ids))).all() if rca_ids else []
         return {"requirement": {"id": requirement_version_id, "external_reference": requirement.external_reference, "version": requirement.version, "analysis_ai_run_id": requirement.analysis_ai_run_id}, "test_case_versions": [{"id": item.test_case_version_id, "test_case_id": item.test_case_id, "provider_test_id": item.content.get("provider_test_id", item.content.get("test_id")), "status": item.status, "source_ai_run_id": item.source_ai_run_id} for item in versions], "reviews": [{"id": item.review_id, "status": item.status} for item in linked_reviews], "test_runs": [{"id": item.test_run_id, "status": item.status, "dataset_version": item.environment} for item in runs], "test_results": [{"id": item.result_id, "test_run_id": item.test_run_id, "test_case_id": item.test_case_id, "test_case_version_id": item.test_case_version_id, "status": item.status, "rca_ai_run_id": item.rca_ai_run_id, "external_issue_link_id": item.external_issue_link_id} for item in results], "rca_ai_runs": [{"id": item.run_id, "prompt_version": item.prompt_version, "model": item.model, "provider": item.provider} for item in rca_runs], "external_issues": [{"link_id": item.link_id, "issue_key": item.issue_key, "artifact_type": item.artifact_type, "artifact_id": item.artifact_id, "sync_status": item.sync_status} for item in links]}
 
-    def retry_external_sync(self, link_id: int) -> models.ExternalIssueLink:
+    def retry_external_sync(
+        self,
+        link_id: int,
+        actor_principal_id: str | None = None,
+    ) -> models.ExternalIssueLink:
         link = self.session.get(models.ExternalIssueLink, link_id)
         if link is None:
             raise KeyError(link_id)
+        if link.artifact_type == "REVIEW":
+            if self.session.get(models.ReviewRequest, link.artifact_id) is None:
+                raise WorkflowConflict("External sync review relationship is invalid")
+        elif link.artifact_type == "TEST_RESULT":
+            try:
+                result_id = int(link.artifact_id)
+            except (TypeError, ValueError):
+                raise WorkflowConflict("External sync test-result relationship is invalid") from None
+            if self.session.get(models.TestResult, result_id) is None:
+                raise WorkflowConflict("External sync test-result relationship is invalid")
+        else:
+            raise WorkflowConflict("Unsupported external sync artifact type")
+        link.last_retry_by_principal_id = actor_principal_id
         comment = None
         if link.artifact_type == "TEST_RESULT":
             result = self.session.get(models.TestResult, int(link.artifact_id))

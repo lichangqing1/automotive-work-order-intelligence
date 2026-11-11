@@ -85,6 +85,8 @@ All `/api/v1` routes require bearer authentication. See
 generation, digest-only API configuration, server-side dashboard configuration,
 and rotation. The legacy `automotive.api` compatibility app is not an approved
 shared or production entry point.
+Role permissions and authenticated actor auditing are documented in
+[`docs/API_AUTHORIZATION.md`](docs/API_AUTHORIZATION.md).
 
 ## Native development
 

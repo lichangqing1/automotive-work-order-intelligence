@@ -22,6 +22,14 @@ def test_complete_schema_can_be_created_from_metadata() -> None:
     assert {"attempt_id", "dataset_version_reference", "status", "failure_stage", "error_category", "sanitized_error"} <= attempt_columns
     ai_run_columns = {item["name"] for item in inspect(engine).get_columns("ai_runs")}
     assert {"failure_stage", "error_category", "correlation_id", "completed_at"} <= ai_run_columns
+    requirement_columns = {item["name"] for item in inspect(engine).get_columns("requirement_versions")}
+    assert "created_by_principal_id" in requirement_columns
+    test_case_version_columns = {item["name"] for item in inspect(engine).get_columns("test_case_versions")}
+    assert "generated_by_principal_id" in test_case_version_columns
+    test_run_columns = {item["name"] for item in inspect(engine).get_columns("test_runs")}
+    assert "submitted_by_principal_id" in test_run_columns
+    external_link_columns = {item["name"] for item in inspect(engine).get_columns("external_issue_links")}
+    assert "last_retry_by_principal_id" in external_link_columns
 
 
 def test_generator_output_ingests_through_source_boundary() -> None:

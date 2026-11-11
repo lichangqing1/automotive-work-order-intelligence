@@ -204,6 +204,7 @@ class TestRun(RunMixin, Base):
     test_run_id: Mapped[str] = mapped_column(String(36), primary_key=True)
     suite: Mapped[str] = mapped_column(String(128), index=True)
     environment: Mapped[str] = mapped_column(String(64))
+    submitted_by_principal_id: Mapped[str | None] = mapped_column(String(128), index=True)
 
 
 class TestResult(Base):
@@ -257,6 +258,7 @@ class RequirementVersion(Base):
     content_hash: Mapped[str] = mapped_column(String(64))
     analysis: Mapped[dict[str, Any] | None] = mapped_column(JSON)
     analysis_ai_run_id: Mapped[str | None] = mapped_column(ForeignKey("ai_runs.run_id"))
+    created_by_principal_id: Mapped[str | None] = mapped_column(String(128), index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     __table_args__ = (UniqueConstraint("requirement_id", "version"),)
 
@@ -268,6 +270,7 @@ class TestCaseVersion(Base):
     version: Mapped[int] = mapped_column(Integer)
     requirement_version_id: Mapped[str] = mapped_column(ForeignKey("requirement_versions.requirement_version_id"), index=True)
     source_ai_run_id: Mapped[str | None] = mapped_column(ForeignKey("ai_runs.run_id"))
+    generated_by_principal_id: Mapped[str | None] = mapped_column(String(128), index=True)
     status: Mapped[str] = mapped_column(String(24), index=True)
     content: Mapped[dict[str, Any]] = mapped_column(JSON)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
@@ -305,6 +308,7 @@ class ExternalIssueLink(Base):
     sync_status: Mapped[str] = mapped_column(String(24), default="PENDING", index=True)
     sync_error: Mapped[str | None] = mapped_column(Text)
     retry_count: Mapped[int] = mapped_column(Integer, default=0)
+    last_retry_by_principal_id: Mapped[str | None] = mapped_column(String(128), index=True)
     synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
