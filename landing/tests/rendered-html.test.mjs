@@ -43,7 +43,7 @@ test("keeps evidence links and avoids inflated claims", async () => {
   ];
   for (const href of requiredEvidence) assert.match(evidencePage, new RegExp(href.replaceAll("/", "\\/")));
   assert.match(page, /View measured evidence/);
-  assert.match(page, /\/en\/evidence/);
+  assert.equal(page.match(/href=\{t\("\/en\/evidence","\/zh\/evidence"\)\}/g)?.length, 2);
   assert.doesNotMatch(page, /href="\/evidence\/[^"]+\.(md|json)"/i);
   assert.doesNotMatch(page, /100% accuracy|enterprise-grade|approved for autonomous/i);
   assert.doesNotMatch(page, /SkeletonPreview|react-loading-skeleton|codex-preview/);
@@ -100,6 +100,8 @@ test("renders stable English and Chinese routes from one evidence source", async
   assert.match(chinese, /BLOCK[\s\S]*?当前 AI 质量门禁/);
   assert.match(english, /href="\/zh"/);
   assert.match(chinese, /href="\/en"/);
+  assert.match(english, /href="\/en\/evidence"/);
+  assert.match(chinese, /href="\/zh\/evidence"/);
 
   for (const value of ["30,000", "1,200", "48.98%"]){
     const pattern = new RegExp(value.replace(".", "\\."));
