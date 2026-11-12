@@ -3,17 +3,41 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from automotive_quality.domains.evaluation.ai_value import RCA_METRIC_VERSION
+
 ROOT = Path(__file__).resolve().parents[1]
+RCA_V2_SOURCE_REPORT = "artifacts/ai_value/rca_report.json"
+RCA_V2_COMPARISON_REPORT = "docs/reports/RCA_METRIC_INTEGRITY_V2_COMPARISON.md"
 
 
 def mean(section: dict, key: str) -> float:
     return float(section[key]["mean"])
 
 
+def validate_rca_v2_provenance(rca: dict, rca_v2: dict) -> None:
+    if rca_v2["scoring_version"] != RCA_METRIC_VERSION:
+        raise ValueError("Corrected RCA scoring version is not supported by this exporter")
+    if rca_v2["source_experiment_id"] != rca["experiment"]["experiment_id"]:
+        raise ValueError("Corrected RCA metrics do not match the preserved source experiment")
+    if rca_v2["source_historical_report"] != RCA_V2_SOURCE_REPORT:
+        raise ValueError("Corrected RCA metrics name an unexpected historical report")
+    if rca_v2["source_comparison_report"] != RCA_V2_COMPARISON_REPORT:
+        raise ValueError("Corrected RCA metrics name an unexpected comparison report")
+    if rca_v2["historical_v1"]["quality_gate"] != rca["quality_gates"]["status"]:
+        raise ValueError("Corrected RCA provenance does not match the preserved policy decision")
+    for metric in ("evidence_support_rate", "unsupported_claim_rate", "root_cause_accuracy"):
+        if rca_v2["historical_v1"][metric] != mean(rca["ai_assisted"], metric):
+            raise ValueError(f"Corrected RCA provenance does not match historical {metric}")
+
+
 def main() -> None:
     artifacts = ROOT / "artifacts/ai_value"
     test = json.loads((artifacts / "test_generation_report.json").read_text(encoding="utf-8"))
     rca = json.loads((artifacts / "rca_report.json").read_text(encoding="utf-8"))
+    rca_v2 = json.loads(
+        (ROOT / "docs/portfolio/data/rca_metrics_v2.json").read_text(encoding="utf-8")
+    )
+    validate_rca_v2_provenance(rca, rca_v2)
     coverage = [
         ("Requirement coverage", "requirement_coverage"),
         ("Negative coverage", "negative_coverage"),
@@ -40,9 +64,10 @@ def main() -> None:
             "baselineSeconds": mean(rca["baseline"], "active_investigation_seconds"),
             "aiSeconds": mean(rca["ai_assisted"], "active_investigation_seconds"),
             "checkUsefulness": mean(rca["ai_assisted"], "recommended_check_usefulness"),
-            "evidenceSupport": mean(rca["ai_assisted"], "evidence_support_rate"),
-            "rootCauseAccuracy": mean(rca["ai_assisted"], "root_cause_accuracy"),
-            "failureClassAccuracy": mean(rca["ai_assisted"], "failure_class_accuracy"),
+            "historicalV1": rca_v2["historical_v1"],
+            "correctedV2": rca_v2["corrected_v2"],
+            "scoringVersion": rca_v2["scoring_version"],
+            "provenance": rca_v2["source_comparison_report"],
         },
         "technology": ["Python", "FastAPI", "PostgreSQL", "SQL", "pytest", "Alembic", "OpenAI", "Jira REST API", "Streamlit", "Docker", "GitHub Actions"],
     }

@@ -7,7 +7,11 @@ cp .env.example .env
 docker compose up --build
 ```
 
-The API is available at `http://localhost:8000/docs`. Liveness is `/health/live`; readiness verifies PostgreSQL at `/health/ready`.
+The API is available at `http://localhost:8000/docs`. Liveness is public at
+`/health/live`; readiness verifies PostgreSQL at `/health/ready` and requires a
+configured bearer credential. Generate local-only credentials and configure
+them as described in [API authentication](../API_AUTHENTICATION.md) before using
+protected routes. Do not commit the resulting `.env` file.
 
 ## Native Python path
 
@@ -30,4 +34,3 @@ docker compose down -v
 docker compose up -d postgres redis
 alembic upgrade head
 ```
-

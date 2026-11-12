@@ -1,5 +1,6 @@
+from conftest import TEST_AUTH_HEADERS, TEST_REVIEWER_HEADERS
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, event
+from sqlalchemy import create_engine, event, select
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
@@ -7,6 +8,7 @@ from automotive_quality.api.dependencies import database_session
 from automotive_quality.api.main import app
 from automotive_quality.api.v1 import _issue_tracker
 from automotive_quality.domains.work_orders.ingestion import ingest_generated_dataset
+from automotive_quality.infrastructure.database import models
 from automotive_quality.infrastructure.database.base import Base
 from automotive_quality.infrastructure.sources.synthetic import generate_dataset
 from automotive_quality.integrations.issue_tracker import LocalIssueTracker
@@ -34,7 +36,8 @@ def _session_override():
 
 
 app.dependency_overrides[database_session] = _session_override
-client = TestClient(app)
+client = TestClient(app, headers=TEST_AUTH_HEADERS)
+reviewer_client = TestClient(app, headers=TEST_REVIEWER_HEADERS)
 
 
 def test_liveness_contract() -> None:
@@ -112,18 +115,44 @@ def test_ai_assisted_jira_review_execution_defect_and_traceability_workflow() ->
     generation = generated.json()
     review_id = generation["review_id"]
     version_id = generation["test_case_version_ids"][0]
+    with Session(engine) as audit_session:
+        requirement_record = audit_session.get(models.RequirementVersion, requirement_version_id)
+        version_record = audit_session.get(models.TestCaseVersion, version_id)
+        assert requirement_record is not None
+        assert requirement_record.created_by_principal_id == "pytest-operator"
+        assert version_record is not None
+        assert version_record.generated_by_principal_id == "pytest-operator"
 
-    blocked = client.post("/api/v1/test-runs", json={"requirement_version_id": requirement_version_id, "test_case_version_ids": [version_id], "dataset_version": "api-test"})
+    blocked = client.post("/api/v1/test-runs", json={"requirement_version_id": requirement_version_id, "test_case_version_ids": [version_id], "dataset_version": "api-test", "actuals": {version_id: "submitted while pending"}})
     assert blocked.status_code == 409
 
     tracker = _issue_tracker()
     assert isinstance(tracker, LocalIssueTracker)
-    synced = client.post(f"/api/v1/reviews/{review_id}/decision", json={"status": "Approved", "reviewer": "qa.engineer", "comment": "Reviewed test intent and evidence"})
+    synced = reviewer_client.post(
+        f"/api/v1/reviews/{review_id}/decision",
+        json={
+            "status": "Approved",
+            "reviewer": "pytest-reviewer",
+            "comment": "Reviewed test intent and evidence",
+        },
+    )
     assert synced.json()["status"] == "APPROVED"
+    with Session(engine) as audit_session:
+        review_record = audit_session.get(models.ReviewRequest, review_id)
+        assert review_record is not None and review_record.reviewer == "pytest-reviewer"
 
     executed = client.post("/api/v1/test-runs", json={"requirement_version_id": requirement_version_id, "test_case_version_ids": [version_id], "dataset_version": "api-test", "actuals": {version_id: "Unexpected system behavior"}})
     assert executed.status_code == 200
     assert executed.json()["status"] == "FAILED"
+    with Session(engine) as audit_session:
+        run_record = audit_session.get(models.TestRun, executed.json()["test_run_id"])
+        assert run_record is not None
+        assert run_record.submitted_by_principal_id == "pytest-operator"
+        result_record = audit_session.scalar(
+            select(models.TestResult).where(models.TestResult.test_run_id == run_record.test_run_id)
+        )
+        assert result_record is not None
+        assert result_record.evidence["submitted_by_principal_id"] == "pytest-operator"
     bug_keys = [key for key in tracker.issues if key.startswith("BUG-")]
     assert len(bug_keys) == 1
 
@@ -151,7 +180,10 @@ def test_jira_outage_never_rolls_back_deterministic_failure(monkeypatch) -> None
     requirement_id = requirement["requirement_version_id"]
     generation = client.post(f"/api/v1/requirements/{requirement_id}/generate-tests").json()
     version_id = generation["test_case_version_ids"][0]
-    approved = client.post(f"/api/v1/reviews/{generation['review_id']}/decision", json={"status": "Approved", "reviewer": "qa.engineer"})
+    approved = reviewer_client.post(
+        f"/api/v1/reviews/{generation['review_id']}/decision",
+        json={"status": "Approved", "reviewer": "pytest-reviewer"},
+    )
     assert approved.json()["status"] == "APPROVED"
     tracker = _issue_tracker()
     original_create_defect = tracker.create_defect
@@ -175,6 +207,10 @@ def test_jira_outage_never_rolls_back_deterministic_failure(monkeypatch) -> None
     retried = client.post(f"/api/v1/external-sync/{failed_link['link_id']}/retry")
     assert retried.status_code == 200
     assert retried.json()["sync_status"] == "SUCCEEDED"
+    with Session(engine) as audit_session:
+        retried_link = audit_session.get(models.ExternalIssueLink, failed_link["link_id"])
+        assert retried_link is not None
+        assert retried_link.last_retry_by_principal_id == "pytest-operator"
 
 
 def test_explicit_review_timing_and_coverage_assessment() -> None:
@@ -183,8 +219,8 @@ def test_explicit_review_timing_and_coverage_assessment() -> None:
     review_id = generated["review_id"]
     version_id = generated["test_case_version_ids"][0]
 
-    started = client.post(f"/api/v1/reviews/{review_id}/start")
-    assessed = client.post(f"/api/v1/reviews/{review_id}/assessment", json={
+    started = reviewer_client.post(f"/api/v1/reviews/{review_id}/start")
+    assessed = reviewer_client.post(f"/api/v1/reviews/{review_id}/assessment", json={
         "was_modified": True,
         "validated_coverage": {version_id: ["missing_resolved_at"]},
         "rejection_reasons": [],

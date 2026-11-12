@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Protocol
 
+from .outbound_security import jira_comment, jira_payload
+
 
 class IssueTracker(Protocol):
     name: str
@@ -30,6 +32,8 @@ class LocalIssueTracker:
         return {"key": issue_key, "summary": str(issue["summary"]), "description": str(issue["description"]), "status": str(issue["status"])}
 
     def _create(self, prefix: str, summary: str, description: str, external_id: str) -> str:
+        payload = jira_payload(summary, description, external_id)
+        summary, description, external_id = payload.summary, payload.description, payload.external_id
         if external_id in self.external_ids:
             return self.external_ids[external_id]
         self._counter += 1
@@ -53,7 +57,7 @@ class LocalIssueTracker:
     def add_comment(self, issue_key: str, comment: str) -> None:
         comments = self.issues[issue_key]["comments"]
         assert isinstance(comments, list)
-        comments.append(comment)
+        comments.append(jira_comment(comment))
 
     def issue_url(self, issue_key: str) -> str:
         return f"local://issues/{issue_key}"

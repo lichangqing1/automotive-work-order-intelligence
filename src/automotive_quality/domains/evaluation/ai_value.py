@@ -2,13 +2,18 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import statistics
+import unicodedata
+from collections import Counter
 from pathlib import Path
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
 from automotive_quality.domains.ai.schemas import AIRootCauseAnalysis, GeneratedTestSuite
+
+RCA_METRIC_VERSION = "rca-metrics-v2"
 
 
 class GoldScenario(BaseModel):
@@ -38,6 +43,7 @@ class RCACase(BaseModel):
     case_id: str
     failure_class: str
     ground_truth_root_cause: str | None
+    equivalent_root_causes: list[str] = Field(default_factory=list)
     evidence_sufficient: bool
     evidence: list[EvidenceItem]
     supporting_evidence_ids: list[str]
@@ -69,6 +75,23 @@ class HumanTestDesignMeasurement(BaseModel):
     case_id: str
     active_design_seconds: float = Field(gt=0)
     validated_coverage: list[str]
+
+
+def validate_generated_test_identities(
+    suite: GeneratedTestSuite,
+    *,
+    variant: str,
+    case_id: str,
+    run_number: int,
+) -> None:
+    counts = Counter(case.test_id for case in suite.cases)
+    duplicates = sorted(test_id for test_id, count in counts.items() if count > 1)
+    if duplicates:
+        identities = "; ".join(
+            f"variant={variant}, case_id={case_id}, run_number={run_number}, test_id={test_id}"
+            for test_id in duplicates
+        )
+        raise ValueError(f"Duplicate generated review identity: {identities}")
 
 
 def load_jsonl(path: str | Path, model: type[BaseModel]) -> list[Any]:
@@ -128,24 +151,68 @@ def test_generation_metrics(
 
 
 def rca_metrics(case: RCACase, result: AIRootCauseAnalysis) -> dict[str, float]:
+    """Score deterministic identity and claim-level evidence properties.
+
+    Root-cause identity accepts only normalized exact labels declared by the
+    benchmark. Evidence support is structural: a claim is supported when it
+    cites a benchmark-designated supporting evidence ID. It does not assert
+    semantic entailment beyond that curated mapping.
+    """
     known_evidence = {item.id for item in case.evidence}
-    correct_evidence = set(case.supporting_evidence_ids)
+    correct_evidence = set(case.supporting_evidence_ids) & known_evidence
     claims = result.claims
-    cited = [evidence_id for claim in claims for evidence_id in claim.evidence_ids]
-    valid = [evidence_id for evidence_id in cited if evidence_id in known_evidence]
-    supported = [evidence_id for evidence_id in cited if evidence_id in correct_evidence]
-    predicted_causes = {item.casefold() for item in result.probable_root_causes} | {item.claim.casefold() for item in claims}
-    expected = case.ground_truth_root_cause.casefold() if case.ground_truth_root_cause else None
-    correct_abstention = (not case.evidence_sufficient and result.insufficient_evidence)
+    cited = [
+        (claim_number, evidence_id)
+        for claim_number, claim in enumerate(claims)
+        for evidence_id in set(claim.evidence_ids)
+    ]
+    valid = [pair for pair in cited if pair[1] in known_evidence]
+    correct = [pair for pair in cited if pair[1] in correct_evidence]
+
+    accepted_causes = set()
+    if case.ground_truth_root_cause is not None:
+        accepted_causes = {
+            _normalize_rca_label(item)
+            for item in (case.ground_truth_root_cause, *case.equivalent_root_causes)
+        }
+    predicted_causes = {_normalize_rca_label(item) for item in result.probable_root_causes}
+    root_cause_correct = bool(predicted_causes) and predicted_causes <= accepted_causes
+
+    assertion_count = max(len(claims), len(result.probable_root_causes))
+    evidence_grounding_allowed = not result.probable_root_causes or root_cause_correct
+    supported_claims = sum(
+        evidence_grounding_allowed
+        and bool(set(claim.evidence_ids) & correct_evidence)
+        for claim in claims
+    )
+    correct_abstention = (
+        not case.evidence_sufficient
+        and result.insufficient_evidence
+        and assertion_count == 0
+    )
+    no_assertion_score = float(correct_abstention)
     return {
-        "failure_class_accuracy": float(result.failure_class.casefold() == case.failure_class.casefold()),
-        "root_cause_accuracy": float(expected is not None and any(expected in cause or cause in expected for cause in predicted_causes)),
-        "citation_validity_rate": _ratio(len(valid), len(cited)) if cited else float(not claims),
-        "evidence_support_rate": _ratio(len(supported), len(cited)) if cited else float(not claims),
-        "evidence_correctness_rate": _ratio(len(supported), len(cited)) if cited else float(not claims),
-        "unsupported_claim_rate": _ratio(len(cited) - len(supported), len(cited)) if cited else 0.0,
+        "failure_class_accuracy": float(
+            _normalize_rca_label(result.failure_class) == _normalize_rca_label(case.failure_class)
+        ),
+        "root_cause_accuracy": float(root_cause_correct),
+        "citation_validity_rate": _ratio(len(valid), len(cited)) if cited else no_assertion_score,
+        "evidence_support_rate": (
+            _ratio(supported_claims, assertion_count) if assertion_count else no_assertion_score
+        ),
+        "evidence_correctness_rate": (
+            _ratio(len(correct), len(cited)) if cited else no_assertion_score
+        ),
+        "unsupported_claim_rate": (
+            _ratio(assertion_count - supported_claims, assertion_count) if assertion_count else 0.0
+        ),
         "correct_abstention": float(correct_abstention),
     }
+
+
+def _normalize_rca_label(value: str) -> str:
+    normalized = unicodedata.normalize("NFKC", value).casefold()
+    return re.sub(r"[\W_]+", "_", normalized).strip("_")
 
 
 def aggregate(per_case: list[dict[str, float]]) -> dict[str, dict[str, float]]:

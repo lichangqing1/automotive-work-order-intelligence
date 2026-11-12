@@ -2,267 +2,161 @@
 
 English | [简体中文](README.zh-CN.md)
 
-🌐 **Interactive prototype:** [English](https://automotive-ai-quality-engineering.p154820.chatgpt.site/) · [简体中文](https://automotive-ai-quality-engineering.p154820.chatgpt.site/zh)
+An evidence-first portfolio project that combines automotive work-order data quality, test development, governed AI assistance, human review, and measurable release gates in one traceable PostgreSQL-backed platform.
 
-**Release:** [`v2.0.0 — Measured AI Quality Platform`](docs/releases/v2.0.0.md)
+**Explore:** [live bilingual recruiter site](https://automotive-ai-quality-engineering.p154820.chatgpt.site/en) · [portfolio evidence map](docs/portfolio/README.md) · [architecture](docs/portfolio/ARCHITECTURE.md) · [reproducible demo](docs/portfolio/DEMO_GUIDE.md) · [source repository](https://github.com/lichangqing1/automotive-work-order-intelligence)
 
-> AI improved coverage over the deterministic baseline and reduced human effort, but it did not outperform human-only coverage and introduced unsupported assumptions. RCA reduced investigation time but failed accuracy thresholds. Both AI quality policies therefore correctly `BLOCK` the current configuration.
+## Verified engineering highlights
 
-**Live project site:** [English](https://automotive-ai-quality-engineering.p154820.chatgpt.site/en) · [简体中文](https://automotive-ai-quality-engineering.p154820.chatgpt.site/zh) · [Source repository](https://github.com/lichangqing1/automotive-work-order-intelligence)
+- A controlled **30,000-record synthetic** work-order benchmark injected 1,200 known defects and detected 1,200/1,200 within that declared benchmark. This is not a production-accuracy claim.
+- Versioned DQ rules, quarantine, source-to-target reconciliation, SQL marts, API contracts, test evidence, and immutable dataset identities share one authoritative PostgreSQL runtime.
+- AI-generated tests remain `REVIEW_REQUIRED`; pending or rejected versions cannot execute. Submitted test results are validated evidence, not automatically executed test steps.
+- Provider-backed operations use authenticated identities, RBAC, Redis quotas/leases, durable PostgreSQL operation claims, response replay, and `AMBIGUOUS` recovery.
+- [GitHub Actions run 43178347023](https://github.com/lichangqing1/automotive-work-order-intelligence/actions/runs/43178347023) passed at commit `719a0bc`: PostgreSQL 12 passed with zero skips, Redis 4 passed with zero skips, and the full suite reported 246 passed and 1 intentional live-Jira skip.
+- Both historical AI quality policies remain **BLOCK**. Controlled synthetic staging is **CONDITIONAL GO**; shared and production deployment remain **NO-GO** pending operational controls.
 
-**Recruiter overview:** The bilingual, evidence-first site summarizes the problem, architecture, controlled benchmark, AI-assisted workflow, measured results, limitations, and quality-gate decisions. English is the default, with stable `/en` and `/zh` routes sharing the same generated metrics and evidence. The Streamlit application remains the separate engineering console. Landing-page source is maintained under [`landing/`](landing/README.md).
+## Architecture overview
 
-A production-shaped quality engineering platform for automotive after-sales, OTA, and diagnostic work orders.
-
-> Ingest relational work-order data → validate and quarantine defects → reconcile source, curated, SQL mart, and API outputs → manage test executions → retrieve historical evidence → assist resolution and RCA → enforce policy-driven quality gates.
-
-## Why this project exists
-
-Automotive work-order operations become unreliable when identifiers are missing, state transitions are inconsistent, OTA versions are incompatible, repeated faults are not connected, or analytics disagree with source systems. This project treats those problems as an integrated **data testing and test engineering system**, with AI added only behind deterministic controls.
-
-It demonstrates four connected capabilities:
-
-1. **Data engineering and data testing** — relational sources, Python processing, SQL validation, reconciliation, and business marts.
-2. **Test development** — versioned quality assets, explicit test-run/result models, evidence, severity, and API contracts.
-3. **AI for testing** — provider-neutral structured requirement analysis, test generation, DQ-rule drafting, and evidence-gated RCA.
-4. **AI quality engineering** — executable benchmarks and generic metric policies that block regressions.
-
-## Implemented architecture
+The project is a modular monolith. FastAPI `/api/v1`, domain/application services, SQLAlchemy/Alembic, and PostgreSQL form the authoritative engineering runtime. Streamlit is an API-only engineering console. The bilingual landing site is a separate, read-only portfolio presentation.
 
 ```text
-Streamlit developer UI / FastAPI /api/v1
-                    │
-          Application and domain services
-        ┌───────────┼───────────────┐
-        ▼           ▼               ▼
- Work orders   Data quality    Test management
- Reconciliation Rule lifecycle Run / result evidence
-        │           │               │
-        └───────────┼───────────────┘
-                    ▼
-        SQLAlchemy 2 + Alembic migrations
-                    ▼
-              PostgreSQL 16
-
-Deterministic baseline: TF-IDF retrieval + evidence-grounded assistance
-Cross-cutting: Pydantic settings, structured schemas, quality policies, CI
+Landing site (read-only evidence)      Streamlit engineering console
+                                                  │
+                                                  ▼
+                                      FastAPI /api/v1
+                           auth → RBAC → limits → Redis admission
+                                                  │
+                             domain and application services
+                       DQ · reconciliation · tests · reviews · AI
+                           │                         │
+                           ▼                         ▼
+                 PostgreSQL + audits      Mock/OpenAI provider
+                                           Local/Jira tracker
 ```
 
-The repository is a modular monolith. PostgreSQL + `automotive_quality` + `/api/v1` is the single authoritative runtime. API handlers remain thin; the original `automotive` package contains compatibility shims for explicitly labelled, non-production benchmarks only. Production retrieval and the dashboard never read SQLite, generated CSVs, or fallback data.
+See the [implemented architecture and protected AI lifecycle diagrams](docs/portfolio/ARCHITECTURE.md). The diagrams deliberately exclude unimplemented Celery workers and pgvector retrieval.
 
-## Current capabilities
+## Core capabilities
 
-| Area | Capability |
+| Area | Implemented capability |
 |---|---|
-| Platform schema | Vehicles, OTA releases, service centers, work orders, immutable version snapshots, diagnostics, resolution history, versioned DQ results, test assets/runs, AI audit runs, evaluation runs/metrics |
-| Database lifecycle | PostgreSQL-first SQLAlchemy models and Alembic migration; full schema can be recreated from zero |
-| Data quality | Unique, null, allowed-value, comparison, conditional, foreign-key, range, regex, aggregate reconciliation, and freshness rules |
-| Governance | DQ lifecycle: `DRAFT → REVIEWED → APPROVED → ACTIVE → DEPRECATED` |
-| Reconciliation | Raw − quarantined = clean; grouped SQL/mart/API comparisons with evidence and variance |
-| SQL | Referential-integrity, OTA-compatibility, source-target checks, and PostgreSQL business marts |
-| Runtime | PostgreSQL-backed ingestion → enterprise DQ → persistent runs/results → reconciliation → database KPI API |
-| Test management | Persistent typed test cases, runs, expected/actual values, affected rows, evidence, and status summaries |
-| AI for testing | Mock/OpenAI provider abstraction, operational prompt registry and hashes, canonical DQ DSL, review-required generated assets, evidence validation, AI-run audit |
-| API | Structured requirement analysis, test generation, DQ rule generation, RCA, explicit deterministic baselines, retrieval, persisted test history/KPIs, health checks |
-| Quality gates | Generic dotted-metric/operator/threshold policy engine configured in YAML |
-| Delivery | Dockerfile, PostgreSQL/Redis/API Compose stack, lint/migration/test/container CI |
+| Data quality | Completeness, uniqueness, validity, comparison, conditional, foreign-key, range, regex, freshness, and aggregate reconciliation rules |
+| Data lifecycle | Immutable dataset versions, content fingerprints, repeat-safe ingestion, quarantine, and durable attempt auditing |
+| Reconciliation | Raw − quarantined = clean plus grouped source, SQL mart, and API variance evidence |
+| Test engineering | Versioned cases, approvals, runs, expected/actual results, dataset identity, evidence, defects, and requirement traceability |
+| AI assistance | Provider-neutral structured requirement analysis, test generation, DQ-rule drafts, RCA, prompt hashes, and AI-run auditing |
+| AI governance | Review-required assets, exact evidence-ID checks, human review completeness, deterministic policies, and preserved BLOCK decisions |
+| API security | Bearer authentication, RBAC, actor attribution, 1 MiB body limit, constrained schemas, Jira DLP, sanitized errors, and security events |
+| Distributed protection | Redis rate limits and concurrency leases plus durable AI-operation idempotency and reconciliation status |
+| Delivery | Alembic migrations, Docker, PostgreSQL/Redis integration gates, Ruff, pytest, pip-audit, and bilingual landing build |
 
-## Quick start with Docker
+Redis actively enforces rate limits and provider concurrency. It is **not** presented as a background task-worker system; Celery-style workers remain outside the implemented scope.
+
+## Engineering case studies
+
+1. [Data quality: controlled defects, quarantine, and reconciliation](docs/portfolio/CASE_DATA_QUALITY.md)
+2. [RCA metric integrity: why 94.52% became 13.33%](docs/portfolio/CASE_RCA_METRIC_INTEGRITY.md)
+3. [AI retry safety: durable claims after ambiguous 503 responses](docs/portfolio/CASE_AI_RETRY_SAFETY.md)
+
+Each case links the problem, reproduction, root cause, implementation, tests, before/after evidence, and remaining limitations.
+
+## Corrected AI evaluation interpretation
+
+The preserved `ai-value-v1` RCA report originally recorded 94.52% evidence support and 5.48% unsupported claims. A later metric-integrity review found that v1 conflated citation correctness with actual claim support and gave overly favorable treatment to omitted or incorrectly identified claims.
+
+| RCA metric | Preserved historical v1 | Corrected `rca-metrics-v2` | Current interpretation |
+|---|---:|---:|---|
+| Evidence support | 94.52% | **13.33%** | v1 overstated support |
+| Unsupported claims | 5.48% | **76.67%** | unacceptable claim risk |
+| Root-cause accuracy | 0% | **0%** | autonomous diagnosis blocked |
+| Quality policy | BLOCK | **BLOCK** | decision unchanged |
+
+The current portfolio uses the corrected v2 values from the [comparison report](docs/reports/RCA_METRIC_INTEGRITY_V2_COMPARISON.md) and [versioned derived record](docs/portfolio/data/rca_metrics_v2.json). The historical JSON, human reviews, datasets, thresholds, and manifest remain unchanged for provenance.
+
+Test generation showed metric-specific gains—49.35% AI-assisted requirement coverage versus 5.83% for the deterministic template baseline and 48.98% measured human-effort saving—but did not beat 63.78% human-only coverage and recorded a 100% unsupported-assumption rate. Its policy also remains `BLOCK`.
+
+## Reproducible demo
+
+The [demonstration guide](docs/portfolio/DEMO_GUIDE.md) uses synthetic fixtures, `MockProvider`, `LocalIssueTracker`, and isolated test infrastructure. It requires no paid provider, live Jira, customer data, database reset, or Redis flush.
+
+Validation-only preview:
 
 ```bash
-cp .env.example .env
-docker compose up --build
+source .venv/bin/activate
+pytest -q tests/test_automotive_generator_quality.py
+pytest -q tests/test_api_authentication.py tests/test_api_authorization.py
+pytest -q tests/test_ai_operation_idempotency.py tests/test_rca_metric_integrity.py
+python scripts/export_landing_data.py
+pytest -q tests/test_landing_data.py
 ```
 
-Then open:
+These commands validate deterministic detection, security denials, idempotency contracts, corrected RCA scoring, and landing provenance. They do not claim to execute manual test steps automatically.
 
-- API documentation: `http://localhost:8000/docs`
-- Liveness: `http://localhost:8000/health/live`
-- Readiness: `http://localhost:8000/health/ready`
+## Security, retry, and release gates
 
-## Native development
+All `/api/v1` operations require bearer authentication except minimal liveness. Authorization, Redis admission, request validation, and business dependencies are independently enforced. Shared/staging/production provider calls require an 8–128 character `Idempotency-Key`.
+
+```text
+GET /api/v1/ai-operations/{operation_id}
+```
+
+The authenticated status endpoint exposes a caller's operation state for safe reconciliation. `SUCCEEDED` requests replay their stored response; payload conflicts, in-progress work, and ambiguous outcomes return controlled conflicts. `RUNNING` and `AMBIGUOUS` operations are never automatically re-executed. Exactly-once external-provider execution or billing across arbitrary crashes is not guaranteed.
+
+Read [authentication](docs/API_AUTHENTICATION.md), [authorization](docs/API_AUTHORIZATION.md), [rate limiting](docs/API_RATE_LIMITING.md), [security hardening](docs/API_SECURITY_HARDENING.md), [operation idempotency](docs/AI_OPERATION_IDEMPOTENCY.md), and the [release gate](docs/reports/C1_SECURITY_RELEASE_GATE.md).
+
+## Technology
+
+Python 3.12 · FastAPI · Pydantic · PostgreSQL 16 · SQLAlchemy 2 · Alembic · Redis 7 · pytest · Ruff · OpenAI structured outputs · Jira REST · Streamlit · Docker · GitHub Actions · React/Vinext landing site
+
+## Development
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-python -m pip install -e '.[dev]'
+python -m pip install -e '.[dev,security]'
 docker compose up -d postgres redis
 alembic upgrade head
-alembic current
-alembic check
 pytest -q
-ruff check src tests
+ruff check .
 ```
 
-Run the PostgreSQL-backed enterprise path:
+Local Docker Compose publishes development ports and uses placeholder credentials. It is not a production deployment specification. Configure digest-only API principals before calling protected routes; see the [local runbook](docs/runbooks/local-development.md).
 
-```bash
-python scripts/run_enterprise_platform.py --rows 30000 --dataset-version local-v1
-```
-
-Run the explicitly non-production comparison benchmark and executable AI evaluation:
-
-```bash
-python scripts/baselines/build_legacy_baseline.py --rows 30000
-python scripts/run_ai_evaluation.py
-```
-
-Run the interfaces:
-
-```bash
-uvicorn automotive_quality.api.main:app --reload
-streamlit run dashboard/app.py
-```
-
-## API examples
-
-```bash
-curl -X POST 'http://localhost:8000/api/v1/retrieval/search?top_k=5' \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "vehicle_model": "Model-X",
-    "ota_version": "6.2.1",
-    "description": "central display intermittently black after OTA",
-    "error_code": "IVI_E104"
-  }'
-```
-
-Important endpoints:
+Important API operations include:
 
 ```text
 GET  /health/live
 GET  /health/ready
-POST /api/v1/retrieval/search
-GET  /api/v1/datasets
-GET  /api/v1/datasets/{version}
 POST /api/v1/ai/requirements/analyze
 POST /api/v1/ai/tests/generate
 POST /api/v1/ai/dq-rules/generate
 POST /api/v1/ai/rca/analyze
-POST /api/v1/requirements/import/jira
 POST /api/v1/requirements/{id}/analyze
 POST /api/v1/requirements/{id}/generate-tests
-GET  /api/v1/reviews/{id}
-POST /api/v1/reviews/{id}/sync
-POST /api/v1/reviews/{id}/decision  # local tracker only
-POST /api/v1/reviews/{id}/start
-POST /api/v1/reviews/{id}/assessment
+GET  /api/v1/ai-operations/{operation_id}
 POST /api/v1/test-runs
 GET  /api/v1/traceability/requirements/{id}
-POST /api/v1/external-sync/{link_id}/retry
-POST /api/v1/baselines/ai/resolution
-POST /api/v1/baselines/ai/rca
-GET  /api/v1/test-runs
-GET  /api/v1/test-runs/{run_id}
 GET  /api/v1/metrics/overview
 GET  /api/v1/ai-value/experiments
 ```
 
-## Quality policy example
+## Evidence and documentation
 
-```yaml
-- metric: retrieval.hit_rate_at_5
-  operator: ">="
-  threshold: 0.70
-- metric: rag.unsupported_claim_rate
-  operator: "<="
-  threshold: 0.0
-```
+- [Portfolio evidence navigation](docs/portfolio/README.md)
+- [AI evaluation protocol](docs/AI_VALUE_EVALUATION.md)
+- [Preserved aggregate artifacts](artifacts/ai_value/README.md)
+- [Corrected RCA comparison](docs/reports/RCA_METRIC_INTEGRITY_V2_COMPARISON.md)
+- [C1 security release gate](docs/reports/C1_SECURITY_RELEASE_GATE.md)
+- [Architecture decisions](docs/adr/ADR-001-modular-monolith.md)
+- [v2.0.0 evidence release](docs/releases/v2.0.0.md)
 
-The evaluator is metric-agnostic. Adding a metric does not require changing Python gate logic.
+## Limitations and readiness
 
-## AI-assisted testing and Jira review
+- All benchmark data is synthetic or curated; no claim generalizes to unobserved production data.
+- Prompt injection is reduced by trust boundaries and schema validation, not eliminated.
+- Provider execution and billing cannot be made absolutely exactly-once without provider-native support.
+- Semantic/pgvector retrieval, Celery workers, and a dedicated React engineering console are not implemented.
+- Production Redis HA/TLS, application TLS termination, secret-manager delivery, network isolation, backup recovery, and security-event operations remain unverified.
+- Local development and isolated engineering verification are `GO`; controlled synthetic staging is `CONDITIONAL GO`; shared and production deployment remain `NO-GO`.
 
-The platform persists imported Jira requirements as immutable versions, links each AI analysis and generated test version to its `AIRun`, and creates one review issue per generation batch. Generated tests remain `REVIEW_REQUIRED` until the tracker reports an approved state; rejected or pending versions cannot execute. Every `TestResult` has relational links to the exact `TestCaseVersion`, external defect link, and RCA `AIRun`. Deterministic results commit before Jira synchronization; external work records `PENDING`, `SUCCEEDED`, or `FAILED` with retry state, and retry-safe external IDs prevent duplicate Jira issues.
-
-CI uses `ISSUE_TRACKER=local`. Set `ISSUE_TRACKER=jira` plus `JIRA_BASE_URL`, `JIRA_EMAIL`, `JIRA_API_TOKEN`, and `JIRA_PROJECT_KEY` for Jira Cloud. Credentials are never stored in the repository. The opt-in live contract is run with `pytest -m jira_integration tests/integration/test_jira_live.py`; normal CI never contacts Jira.
-
-## Task 3: measured AI value
-
-The controlled benchmark compares the same curated requirement or failure evidence across a deterministic baseline and an AI-assisted variant. It measures scenario, boundary, negative, integration, and data-quality coverage; duplicate, executable, approval, edit, rejection, and unsupported-assumption rates; human effort and elapsed time; and RCA accuracy, evidence support, unsupported claims, abstention, usefulness, and investigation time.
-
-Mock runs are regression-only and are always marked `NOT PUBLISHABLE`. A test-generation result becomes publishable only when an immutable real-provider run is rescored with exactly one human review for every baseline and AI-generated test, plus one matched human-only timing record for every requirement. RCA likewise requires exactly one review per case and run. Missing, duplicate, or unexpected records block publication. The runner never overwrites previous experiments and retains configuration, dataset hash, raw outputs, review queue, statistical summaries, and policy results.
-
-```bash
-python scripts/run_ai_value_experiment.py \
-  --experiment test-generation \
-  --dataset evaluation/ai_value/requirements.jsonl \
-  --provider openai \
-  --model "$LLM_MODEL" \
-  --runs 3
-
-# Complete the generated review_queue.jsonl, then score those exact outputs:
-python scripts/run_ai_value_experiment.py \
-  --score-run results/ai_value/EXP-... \
-  --reviews evaluation/ai_value/reviews.jsonl \
-  --human-baseline evaluation/ai_value/human_only_measurements.jsonl \
-  --database-url "$DATABASE_URL"
-
-python scripts/run_ai_value_experiment.py \
-  --experiment rca \
-  --dataset evaluation/ai_value/rca_cases.jsonl \
-  --provider openai \
-  --model "$LLM_MODEL" \
-  --runs 3
-
-python scripts/run_ai_value_experiment.py \
-  --score-run results/ai_value/EXP-... \
-  --reviews evaluation/ai_value/rca_reviews.jsonl \
-  --database-url "$DATABASE_URL"
-```
-
-See `evaluation/ai_value/README.md` and `docs/AI_VALUE_EVALUATION.md`. Do not quote an improvement percentage until the real-provider output has completed human review and the generated report says `publishable: true`.
-
-### Measured AI-value evidence
-
-- [Browser-friendly evidence hub](https://automotive-ai-quality-engineering.p154820.chatgpt.site/en/evidence)
-- [Chinese evidence hub](https://automotive-ai-quality-engineering.p154820.chatgpt.site/zh/evidence)
-- [Raw AI-value artifacts](artifacts/ai_value/README.md)
-
-The completed `ai-value-v1` test-generation and RCA experiments both used OpenAI with three runs, complete human review, and immutable rescoring; both reports are marked `publishable: true`. The sanitized evidence and reproducibility manifest are in [`artifacts/ai_value/`](artifacts/ai_value/README.md).
-
-Test generation increased mean requirement coverage from 5.83% to 49.35% and mean negative coverage from 20.00% to 47.96%. Measured human-effort saving was 48.98%, and end-to-end saving was 19.00%. However, the AI unsupported-assumption rate was 100%, and the proposed test-generation policy returned `BLOCK`.
-
-RCA reduced mean active investigation time from 77.60 seconds to 49.41 seconds, and recommended-check usefulness averaged 75.56%. Evidence support was 94.52%, but unsupported claims were 5.48%, correct abstention was 13.33%, and root-cause accuracy was 0%. The proposed RCA policy also returned `BLOCK`.
-
-These results support metric-specific gains and regressions only. They do not establish universal AI superiority, and the policy thresholds remain `proposed_until_calibrated`.
-
-## Repository map
-
-```text
-src/automotive_quality/
-  api/                    Versioned platform API
-  domains/
-    data_quality/         Rules, lifecycle, execution
-    evaluation/           Generic quality policies
-    ai/                   Providers, structured workflows, evals
-    testing/              Test assets and execution runs
-    work_orders/          Reconciliation services
-  infrastructure/database/ SQLAlchemy models and sessions
-  shared/                 Settings and structured logging
-src/automotive/           Working deterministic compatibility baseline
-migrations/               Alembic environment and initial schema
-sql/                      Relational validations and marts
-evaluation/               Fast regression and controlled AI-value benchmark inputs
-prompts/                  Versioned prompt policies
-configs/                  Rules, policies, and model configuration
-tests/                    Unit, integration, API, DQ, retrieval, and regression tests
-docs/adr/                 Architecture decisions
-docs/runbooks/            Operational procedures
-```
-
-## Measured baseline
-
-The committed reports are generated by executable code, not manually entered dashboard constants. Rebuild before quoting results. Retrieval evaluation distinguishes true Recall@K and Precision@K from Hit Rate@K and MRR. The controlled 30,000-row enterprise DQ benchmark now deterministically records 1,200 TP, 0 FP, and 0 FN.
-
-## Data and claims boundary
-
-The project uses synthetic and controlled experimental data. It contains no real customer, vehicle, or personal information.
-
-Reported defect-detection and AI-evaluation metrics apply to the controlled benchmarks and should not be interpreted as general production accuracy. The repository does not claim PIPL, ISO, or automotive-industry certification.
-
-## Deliberate scope boundary
-
-The persistent runtime, provider-neutral AI-for-testing layer, and versioned AI-value evaluation program are implemented. CI continues to use `MockProvider`, while completed OpenAI experiments with full human review are published as sanitized aggregate evidence under `artifacts/ai_value/`. Both current AI-value policies return `BLOCK`, preserving measured regressions rather than presenting the model as production-approved. The committed `ai-value-v1` benchmark has 30 requirement and 30 RCA cases. Celery workers, semantic/pgvector retrieval, and a dedicated React engineering console remain subsequent stages; the current React landing page is recruiter-facing, while Streamlit remains the engineering console. Redis is present for the planned worker but is not represented as active task execution.
-
-See [architecture](docs/AUTOMOTIVE_ARCHITECTURE.md), [local runbook](docs/runbooks/local-development.md), and the ADRs for decisions and tradeoffs.
+The project demonstrates how to measure both AI value and AI failure honestly—and how to block promotion when evidence is incomplete or quality is insufficient.

@@ -29,6 +29,10 @@ def test_migration_baseline_is_explicit_and_immutable() -> None:
     revisions = sorted((ROOT / "migrations/versions").glob("*.py"))
     assert revisions[0].name == "20261015_0001_initial_explicit_schema.py"
     assert "20261016_0002_ai_value_evaluation.py" in {path.name for path in revisions}
+    assert "20261111_0003_ingestion_attempt_audit.py" in {path.name for path in revisions}
+    assert "20261111_0004_ai_run_failure_audit.py" in {path.name for path in revisions}
+    assert "20261111_0005_authenticated_actor_audit.py" in {path.name for path in revisions}
+    assert "20261112_0006_ai_operation_idempotency.py" in {path.name for path in revisions}
     for revision in revisions:
         text = revision.read_text()
         assert "op.create_table" in text or "op.add_column" in text

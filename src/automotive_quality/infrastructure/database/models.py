@@ -3,7 +3,19 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import JSON, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy import (
+    JSON,
+    CheckConstraint,
+    DateTime,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from .base import Base
@@ -24,6 +36,8 @@ class DatasetVersion(Base):
     version: Mapped[str] = mapped_column(String(32))
     row_count: Mapped[int] = mapped_column(Integer)
     content_hash: Mapped[str] = mapped_column(String(64))
+    source_content_hash: Mapped[str | None] = mapped_column(String(64))
+    source_hash_version: Mapped[str | None] = mapped_column(String(32))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     __table_args__ = (UniqueConstraint("dataset_id", "version"),)
 
@@ -38,6 +52,31 @@ class IngestionRun(Base):
     error: Mapped[str | None] = mapped_column(Text)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    __table_args__ = (Index("uq_ingestion_runs_dataset_version_id", "dataset_version_id", unique=True),)
+
+
+class IngestionAttempt(Base):
+    __tablename__ = "ingestion_attempts"
+    attempt_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    dataset_id: Mapped[str] = mapped_column(String(36), index=True)
+    dataset_version_reference: Mapped[str] = mapped_column(String(64), index=True)
+    dataset_version_id: Mapped[str | None] = mapped_column(String(36), index=True)
+    source_content_hash: Mapped[str] = mapped_column(String(64), index=True)
+    source_hash_version: Mapped[str] = mapped_column(String(32))
+    status: Mapped[str] = mapped_column(String(32), index=True)
+    failure_stage: Mapped[str | None] = mapped_column(String(64))
+    error_category: Mapped[str | None] = mapped_column(String(64))
+    sanitized_error: Mapped[str | None] = mapped_column(Text)
+    source_rows: Mapped[int] = mapped_column(Integer)
+    ingested_rows: Mapped[int] = mapped_column(Integer, default=0)
+    rejected_rows: Mapped[int] = mapped_column(Integer, default=0)
+    ingestion_run_id: Mapped[str | None] = mapped_column(String(36))
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    __table_args__ = (
+        Index("ix_ingestion_attempts_version_status", "dataset_version_reference", "status"),
+    )
 
 
 class Vehicle(Base):
@@ -177,6 +216,7 @@ class TestRun(RunMixin, Base):
     test_run_id: Mapped[str] = mapped_column(String(36), primary_key=True)
     suite: Mapped[str] = mapped_column(String(128), index=True)
     environment: Mapped[str] = mapped_column(String(64))
+    submitted_by_principal_id: Mapped[str | None] = mapped_column(String(128), index=True)
 
 
 class TestResult(Base):
@@ -209,8 +249,56 @@ class AIRun(Base):
     schema_valid: Mapped[bool]
     status: Mapped[str] = mapped_column(String(24), default="SUCCEEDED")
     error_message: Mapped[str | None] = mapped_column(Text)
+    failure_stage: Mapped[str | None] = mapped_column(String(64))
+    error_category: Mapped[str | None] = mapped_column(String(64))
+    correlation_id: Mapped[str | None] = mapped_column(String(64), index=True)
     latency_ms: Mapped[float] = mapped_column(Float)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class AIOperation(Base):
+    __tablename__ = "ai_operations"
+    operation_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    principal_id: Mapped[str] = mapped_column(String(128), index=True)
+    operation_type: Mapped[str] = mapped_column(String(64))
+    target_resource: Mapped[str] = mapped_column(String(256))
+    idempotency_key: Mapped[str] = mapped_column(String(128))
+    request_hash: Mapped[str] = mapped_column(String(64))
+    state: Mapped[str] = mapped_column(String(24), index=True)
+    owner_token: Mapped[str] = mapped_column(String(64))
+    response_payload: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    response_status: Mapped[int | None] = mapped_column(Integer)
+    ai_run_id: Mapped[str | None] = mapped_column(String(36), index=True)
+    error_category: Mapped[str | None] = mapped_column(String(64))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    __table_args__ = (
+        CheckConstraint(
+            "state IN ('RUNNING', 'SUCCEEDED', 'FAILED', 'AMBIGUOUS')",
+            name="ck_ai_operations_state",
+        ),
+        CheckConstraint(
+            "(state = 'RUNNING' AND completed_at IS NULL) OR "
+            "(state IN ('SUCCEEDED', 'FAILED', 'AMBIGUOUS') AND completed_at IS NOT NULL)",
+            name="ck_ai_operations_terminal_timestamp",
+        ),
+        CheckConstraint(
+            "state != 'SUCCEEDED' OR response_payload IS NOT NULL",
+            name="ck_ai_operations_success_response",
+        ),
+        UniqueConstraint(
+            "principal_id",
+            "operation_type",
+            "target_resource",
+            "idempotency_key",
+            name="uq_ai_operations_scope_key",
+        ),
+    )
 
 
 class RequirementVersion(Base):
@@ -226,6 +314,7 @@ class RequirementVersion(Base):
     content_hash: Mapped[str] = mapped_column(String(64))
     analysis: Mapped[dict[str, Any] | None] = mapped_column(JSON)
     analysis_ai_run_id: Mapped[str | None] = mapped_column(ForeignKey("ai_runs.run_id"))
+    created_by_principal_id: Mapped[str | None] = mapped_column(String(128), index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     __table_args__ = (UniqueConstraint("requirement_id", "version"),)
 
@@ -237,6 +326,7 @@ class TestCaseVersion(Base):
     version: Mapped[int] = mapped_column(Integer)
     requirement_version_id: Mapped[str] = mapped_column(ForeignKey("requirement_versions.requirement_version_id"), index=True)
     source_ai_run_id: Mapped[str | None] = mapped_column(ForeignKey("ai_runs.run_id"))
+    generated_by_principal_id: Mapped[str | None] = mapped_column(String(128), index=True)
     status: Mapped[str] = mapped_column(String(24), index=True)
     content: Mapped[dict[str, Any]] = mapped_column(JSON)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
@@ -260,6 +350,9 @@ class ReviewRequest(Base):
     validated_coverage: Mapped[dict[str, list[str]] | None] = mapped_column(JSON)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    ai_operation_id: Mapped[str | None] = mapped_column(
+        ForeignKey("ai_operations.operation_id"), unique=True, index=True
+    )
 
 
 class ExternalIssueLink(Base):
@@ -274,6 +367,7 @@ class ExternalIssueLink(Base):
     sync_status: Mapped[str] = mapped_column(String(24), default="PENDING", index=True)
     sync_error: Mapped[str | None] = mapped_column(Text)
     retry_count: Mapped[int] = mapped_column(Integer, default=0)
+    last_retry_by_principal_id: Mapped[str | None] = mapped_column(String(128), index=True)
     synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 

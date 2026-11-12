@@ -1,0 +1,25 @@
+{
+  "schema_version": "1.0",
+  "scoring_version": "rca-metrics-v2",
+  "source_experiment_id": "EXP-20261029T132933Z-4731BD11",
+  "source_historical_report": "artifacts/ai_value/rca_report.json",
+  "source_comparison_report": "docs/reports/RCA_METRIC_INTEGRITY_V2_COMPARISON.md",
+  "review_completeness": {"reviewed": 90, "expected": 90},
+  "historical_v1": {
+    "evidence_support_rate": 0.9451851851851851,
+    "unsupported_claim_rate": 0.054814814814814816,
+    "root_cause_accuracy": 0.0,
+    "quality_gate": "BLOCK"
+  },
+  "corrected_v2": {
+    "citation_validity_rate": 0.9,
+    "evidence_correctness_rate": 0.845185,
+    "evidence_support_rate": 0.133333,
+    "unsupported_claim_rate": 0.766667,
+    "correct_abstention": 0.133333,
+    "failure_class_accuracy": 0.0,
+    "root_cause_accuracy": 0.0,
+    "quality_gate": "BLOCK"
+  },
+  "interpretation": "Portfolio-facing RCA claims use corrected_v2. historical_v1 remains preserved for provenance and must not be presented as the current valid interpretation."
+}

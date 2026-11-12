@@ -1,15 +1,27 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import datetime, timezone
 from functools import lru_cache
-from typing import Annotated
+from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from automotive_quality.application.ai_testing_workflow import AITestingWorkflow, WorkflowConflict
+from automotive_quality.application.ai_operations import (
+    AIOperationConflict,
+    AIOperationState,
+    AIOperationStore,
+    OperationClaim,
+    canonical_request_hash,
+)
+from automotive_quality.application.ai_testing_workflow import (
+    AITestingWorkflow,
+    ExternalSyncUnavailable,
+    WorkflowConflict,
+)
 from automotive_quality.application.runtime import database_kpis
 from automotive_quality.baselines.deterministic_ai import assist_resolution, build_rca, generate_rule
 from automotive_quality.baselines.schemas import DQRuleSpec, RCAResult, ResolutionResponse, WorkOrderInput
@@ -18,64 +30,163 @@ from automotive_quality.domains.ai.providers.openai import OpenAIProvider
 from automotive_quality.domains.ai.schemas import (
     AIRootCauseAnalysis,
     GeneratedTestSuite,
+    RCAEvidenceRequest,
     RequirementAnalysis,
     RuleDraft,
 )
-from automotive_quality.domains.ai.workflows import AIWorkflowService
+from automotive_quality.domains.ai.workflows import (
+    AIWorkflowService,
+    RCAEvidenceValidationError,
+    RCAProviderError,
+)
 from automotive_quality.domains.retrieval.models import SimilarCase
 from automotive_quality.domains.retrieval.service import RetrievalIndexNotReady, RetrievalService
 from automotive_quality.domains.testing.models import TestRun
 from automotive_quality.infrastructure.database import models as database_models
+from automotive_quality.infrastructure.database.dataset_versions import (
+    AmbiguousDatasetVersion,
+    UnknownDatasetVersion,
+    resolve_dataset_version,
+)
 from automotive_quality.infrastructure.database.repositories import AIRunRepository, PostgresTestRunRepository
 from automotive_quality.integrations.issue_tracker import IssueTracker, LocalIssueTracker
 from automotive_quality.integrations.jira import JiraIssueTracker
 from automotive_quality.shared.config import get_settings
+from automotive_quality.shared.security_logging import log_security_event
 
+from .auth import AuthenticatedPrincipal, authenticated_principal
+from .authorization import Permission
 from .dependencies import database_session, retrieval_service
+from .rate_limits import OperationCategory, enforce_rate_limit, ensure_ai_concurrency_protected
 
-router = APIRouter(prefix="/api/v1")
+router = APIRouter(prefix="/api/v1", dependencies=[Depends(authenticated_principal)])
 DatabaseSession = Annotated[Session, Depends(database_session)]
 Retrieval = Annotated[RetrievalService, Depends(retrieval_service)]
+Reader = Annotated[
+    AuthenticatedPrincipal,
+    Depends(enforce_rate_limit(Permission.READ, OperationCategory.READ)),
+]
+BaselineAIController = Annotated[
+    AuthenticatedPrincipal,
+    Depends(enforce_rate_limit(Permission.OPERATE_AI, OperationCategory.AI)),
+]
+AIController = Annotated[
+    AuthenticatedPrincipal,
+    Depends(enforce_rate_limit(Permission.OPERATE_AI, OperationCategory.AI, ai_concurrency=True)),
+]
+RequirementAIController = Annotated[
+    AuthenticatedPrincipal,
+    Depends(enforce_rate_limit(Permission.OPERATE_REQUIREMENTS, OperationCategory.AI, ai_concurrency=True)),
+]
+JiraRequirementOperator = Annotated[
+    AuthenticatedPrincipal,
+    Depends(enforce_rate_limit(Permission.OPERATE_REQUIREMENTS, OperationCategory.JIRA)),
+]
+TestSubmitter = Annotated[
+    AuthenticatedPrincipal,
+    Depends(enforce_rate_limit(Permission.SUBMIT_TEST_RESULTS, OperationCategory.MUTATION)),
+]
+Reviewer = Annotated[
+    AuthenticatedPrincipal,
+    Depends(enforce_rate_limit(Permission.REVIEW, OperationCategory.MUTATION)),
+]
+JiraReviewer = Annotated[
+    AuthenticatedPrincipal,
+    Depends(enforce_rate_limit(Permission.REVIEW, OperationCategory.JIRA)),
+]
+SyncOperator = Annotated[
+    AuthenticatedPrincipal,
+    Depends(enforce_rate_limit(Permission.RETRY_EXTERNAL_SYNC, OperationCategory.JIRA)),
+]
+IdempotencyKey = Annotated[str | None, Header(alias="Idempotency-Key")]
 
 
 class RequirementRequest(BaseModel):
-    requirement: str
+    requirement: str = Field(min_length=5, max_length=12_000)
 
 
 class TestGenerationRequest(BaseModel):
-    requirement: str
+    requirement: str = Field(min_length=5, max_length=12_000)
     analysis: RequirementAnalysis
 
 
 class RCARequest(BaseModel):
-    evidence: dict[str, object]
+    evidence: RCAEvidenceRequest | dict[str, object]
 
 
 class RetrievalRequest(WorkOrderInput):
-    dataset_version: str
+    dataset_version: str = Field(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]*$")
 
 
 class JiraImportRequest(BaseModel):
-    issue_key: str
+    issue_key: str = Field(
+        min_length=1,
+        max_length=128,
+        pattern=r"^[A-Za-z][A-Za-z0-9_]*-[A-Za-z0-9][A-Za-z0-9_-]*$",
+    )
 
 
 class TestRunRequest(BaseModel):
-    requirement_version_id: str
-    test_case_version_ids: list[str]
-    dataset_version: str
-    actuals: dict[str, str] = {}
+    requirement_version_id: str = Field(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]*$")
+    test_case_version_ids: list[str] = Field(max_length=100)
+    dataset_version: str = Field(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]*$")
+    actuals: dict[str, str] = Field(default_factory=dict, max_length=100)
+
+    @field_validator("test_case_version_ids")
+    @classmethod
+    def test_case_ids_are_bounded(cls, value: list[str]) -> list[str]:
+        if any(not item or len(item) > 128 for item in value):
+            raise ValueError("test-case version IDs must be between 1 and 128 characters")
+        return value
+
+    @field_validator("actuals")
+    @classmethod
+    def actual_results_are_bounded(cls, value: dict[str, str]) -> dict[str, str]:
+        if any(not key or len(key) > 128 or len(result) > 8_000 for key, result in value.items()):
+            raise ValueError("actual-result keys or values exceed their limits")
+        return value
+
+
+class TestRunResponse(BaseModel):
+    test_run_id: str
+    status: str
+    execution_mode: str
+    automatically_executed: bool
+    submitted_results: int
+    passed: int
+    failed: int
+    total: int
+    external_sync: list[str]
 
 
 class ReviewDecisionRequest(BaseModel):
-    status: str
-    reviewer: str
-    comment: str | None = None
+    status: str = Field(min_length=1, max_length=64)
+    reviewer: str | None = Field(default=None, max_length=128)
+    comment: str | None = Field(default=None, max_length=4_000)
 
 
 class ReviewAssessmentRequest(BaseModel):
     was_modified: bool
-    validated_coverage: dict[str, list[str]]
-    rejection_reasons: list[str] = []
+    validated_coverage: dict[str, list[str]] = Field(max_length=100)
+    rejection_reasons: list[str] = Field(default_factory=list, max_length=100)
+
+    @field_validator("validated_coverage")
+    @classmethod
+    def coverage_is_bounded(cls, value: dict[str, list[str]]) -> dict[str, list[str]]:
+        if any(
+            not key or len(key) > 128 or len(labels) > 100
+            or any(not label or len(label) > 512 for label in labels)
+            for key, labels in value.items()
+        ):
+            raise ValueError("validated coverage exceeds its limits")
+        return value
+
+    @field_validator("rejection_reasons")
+    @classmethod
+    def rejection_reasons_are_bounded(cls, value: list[str]) -> list[str]:
+        if any(not item.strip() or len(item) > 4_000 for item in value):
+            raise ValueError("rejection reasons must be non-blank and bounded")
+        return value
 
 
 @lru_cache(maxsize=1)
@@ -122,8 +233,143 @@ def _query(case: WorkOrderInput) -> str:
     return " ".join(filter(None, [case.error_code, case.description, case.ota_version]))
 
 
+def _operation_error(code: str, operation_id: str, message: str, status_code: int = 409) -> HTTPException:
+    return HTTPException(
+        status_code=status_code,
+        detail={"code": code, "operation_id": operation_id, "message": message},
+    )
+
+
+def _execute_idempotent_ai(
+    *,
+    session: Session,
+    principal: AuthenticatedPrincipal,
+    idempotency_key: str | None,
+    operation_type: str,
+    target_resource: str,
+    payload: object,
+    response: Response,
+    execute: Callable[[OperationClaim | None], Any],
+    ai_run_id: Callable[[], str | None],
+) -> Any:
+    settings = get_settings()
+    if not idempotency_key:
+        if settings.environment.lower() in {"shared", "staging", "production"}:
+            raise HTTPException(
+                status_code=428,
+                detail={"code": "IDEMPOTENCY_KEY_REQUIRED", "message": "Idempotency-Key is required"},
+            )
+        result = execute(None)
+        ensure_ai_concurrency_protected(principal)
+        return result
+
+    store = AIOperationStore(session)
+    try:
+        claim = store.claim(
+            principal_id=principal.principal_id,
+            operation_type=operation_type,
+            target_resource=target_resource,
+            idempotency_key=idempotency_key,
+            request_hash=canonical_request_hash(payload),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail={"code": "INVALID_IDEMPOTENCY_KEY", "message": str(exc)}) from exc
+    except AIOperationConflict as exc:
+        raise _operation_error(exc.code, exc.operation_id, str(exc)) from exc
+
+    response.headers["X-AI-Operation-ID"] = claim.operation_id
+    if not claim.is_owner:
+        if claim.state is AIOperationState.SUCCEEDED and claim.response_payload is not None:
+            response.headers["Idempotent-Replay"] = "true"
+            return claim.response_payload
+        messages = {
+            AIOperationState.RUNNING: ("OPERATION_IN_PROGRESS", "AI operation is already in progress"),
+            AIOperationState.AMBIGUOUS: (
+                "OPERATION_AMBIGUOUS",
+                "AI operation completion is ambiguous; inspect status and reconcile without automatic retry",
+            ),
+            AIOperationState.FAILED: ("OPERATION_FAILED", "AI operation previously failed"),
+        }
+        code, message = messages[claim.state]
+        raise _operation_error(code, claim.operation_id, message)
+
+    try:
+        result = execute(claim)
+        ensure_ai_concurrency_protected(principal)
+        serialized = result.model_dump(mode="json") if isinstance(result, BaseModel) else dict(result)
+        store.succeed(claim, serialized, ai_run_id=ai_run_id())
+        return result
+    except HTTPException as exc:
+        ambiguous = exc.status_code >= 500
+        store.fail(
+            claim,
+            "CONTROL_FAILURE" if ambiguous else "REQUEST_REJECTED",
+            ambiguous=ambiguous,
+            ai_run_id=ai_run_id(),
+        )
+        if ambiguous:
+            raise _operation_error(
+                "OPERATION_AMBIGUOUS",
+                claim.operation_id,
+                "AI operation completion is ambiguous; inspect status and reconcile without automatic retry",
+                status_code=503,
+            ) from exc
+        raise
+    except AIOperationConflict as exc:
+        raise _operation_error(exc.code, exc.operation_id, str(exc)) from exc
+    except Exception as exc:
+        store.fail(
+            claim,
+            "PROVIDER_COMPLETION_UNKNOWN",
+            ambiguous=True,
+            ai_run_id=ai_run_id(),
+        )
+        raise _operation_error(
+            "OPERATION_AMBIGUOUS",
+            claim.operation_id,
+            "AI operation completion is ambiguous; inspect status and reconcile without automatic retry",
+            status_code=503,
+        ) from exc
+
+
+def _bind_reviewer(
+    session: Session,
+    review_id: str,
+    principal: AuthenticatedPrincipal,
+    *,
+    claimed_reviewer: str | None = None,
+) -> database_models.ReviewRequest:
+    review = session.scalar(
+        select(database_models.ReviewRequest)
+        .where(database_models.ReviewRequest.review_id == review_id)
+        .with_for_update()
+    )
+    if review is None:
+        raise HTTPException(status_code=404, detail="Review not found")
+    if claimed_reviewer is not None and claimed_reviewer != principal.principal_id:
+        raise HTTPException(status_code=409, detail="Reviewer identity must match the authenticated principal")
+    if review.reviewer is not None and review.reviewer != principal.principal_id:
+        raise HTTPException(status_code=403, detail="Review is assigned to a different authenticated principal")
+    versions = [session.get(database_models.TestCaseVersion, artifact_id) for artifact_id in review.artifact_ids]
+    if review.artifact_type != "TEST_CASE_BATCH" or not versions or any(version is None for version in versions):
+        raise HTTPException(status_code=409, detail="Review artifact relationships are invalid")
+    typed_versions = [version for version in versions if version is not None]
+    requirement_ids = {version.requirement_version_id for version in typed_versions}
+    if len(requirement_ids) != 1:
+        raise HTTPException(status_code=409, detail="Review artifacts must belong to one requirement version")
+    is_administrator = "administrator" in principal.roles
+    generators = {version.generated_by_principal_id for version in typed_versions}
+    if None in generators and not is_administrator:
+        raise HTTPException(status_code=403, detail="Unattributed historical reviews require an administrator")
+    if principal.principal_id in generators and not is_administrator:
+        raise HTTPException(status_code=403, detail="A principal cannot review its own generated output")
+    review.reviewer = principal.principal_id
+    session.flush()
+    return review
+
+
 @router.post("/retrieval/search", response_model=list[SimilarCase])
-def search(case: RetrievalRequest, service: Retrieval, top_k: int = Query(5, ge=1, le=20)) -> list[SimilarCase]:
+def search(case: RetrievalRequest, _principal: Reader, service: Retrieval, top_k: int = Query(5, ge=1, le=20)) -> list[SimilarCase]:
     try:
         return service.search(case.dataset_version, _query(case), top_k=top_k)
     except RetrievalIndexNotReady as exc:
@@ -131,7 +377,7 @@ def search(case: RetrievalRequest, service: Retrieval, top_k: int = Query(5, ge=
 
 
 @router.post("/baselines/ai/resolution", response_model=ResolutionResponse)
-def resolution(case: RetrievalRequest, service: Retrieval, top_k: int = Query(5, ge=1, le=20)) -> ResolutionResponse:
+def resolution(case: RetrievalRequest, _principal: BaselineAIController, service: Retrieval, top_k: int = Query(5, ge=1, le=20)) -> ResolutionResponse:
     try:
         similar = service.search(case.dataset_version, _query(case), top_k=top_k)
     except RetrievalIndexNotReady as exc:
@@ -140,7 +386,7 @@ def resolution(case: RetrievalRequest, service: Retrieval, top_k: int = Query(5,
 
 
 @router.post("/baselines/ai/rca", response_model=RCAResult)
-def rca(case: RetrievalRequest, service: Retrieval, top_k: int = Query(5, ge=1, le=20)) -> RCAResult:
+def rca(case: RetrievalRequest, _principal: BaselineAIController, service: Retrieval, top_k: int = Query(5, ge=1, le=20)) -> RCAResult:
     try:
         similar = service.search(case.dataset_version, _query(case), top_k=top_k)
     except RetrievalIndexNotReady as exc:
@@ -149,17 +395,17 @@ def rca(case: RetrievalRequest, service: Retrieval, top_k: int = Query(5, ge=1, 
 
 
 @router.post("/baselines/dq/rules/draft", response_model=DQRuleSpec)
-def draft_rule(requirement: str = Query(min_length=5)) -> DQRuleSpec:
+def draft_rule(_principal: BaselineAIController, requirement: str = Query(min_length=5)) -> DQRuleSpec:
     return generate_rule(requirement)
 
 
 @router.get("/test-runs", response_model=list[TestRun])
-def list_test_runs(session: DatabaseSession) -> list[TestRun]:
+def list_test_runs(_principal: Reader, session: DatabaseSession) -> list[TestRun]:
     return PostgresTestRunRepository(session).list()
 
 
 @router.get("/test-runs/{run_id}", response_model=TestRun)
-def get_test_run(run_id: str, session: DatabaseSession) -> TestRun:
+def get_test_run(run_id: str, _principal: Reader, session: DatabaseSession) -> TestRun:
     run = PostgresTestRunRepository(session).get(run_id)
     if not run:
         raise HTTPException(status_code=404, detail="Test run not found")
@@ -167,71 +413,205 @@ def get_test_run(run_id: str, session: DatabaseSession) -> TestRun:
 
 
 @router.get("/metrics/overview")
-def overview(session: DatabaseSession) -> dict[str, int]:
-    return database_kpis(session)
+def overview(_principal: Reader, session: DatabaseSession, dataset_version: str | None = None) -> dict[str, object]:
+    try:
+        return database_kpis(session, dataset_version)
+    except UnknownDatasetVersion as exc:
+        raise HTTPException(status_code=404, detail="Dataset version not found") from exc
+    except AmbiguousDatasetVersion as exc:
+        raise HTTPException(status_code=409, detail="Dataset version label is ambiguous; use dataset_version_id") from exc
 
 
 @router.get("/datasets")
-def list_datasets(session: DatabaseSession) -> list[dict[str, object]]:
+def list_datasets(_principal: Reader, session: DatabaseSession) -> list[dict[str, object]]:
     versions = session.scalars(select(database_models.DatasetVersion).order_by(database_models.DatasetVersion.created_at.desc())).all()
     return [{"dataset_version_id": item.dataset_version_id, "dataset_id": item.dataset_id, "version": item.version, "row_count": item.row_count, "content_hash": item.content_hash, "created_at": item.created_at} for item in versions]
 
 
 @router.get("/datasets/{version}")
-def get_dataset(version: str, session: DatabaseSession) -> dict[str, object]:
-    item = session.scalar(select(database_models.DatasetVersion).where(database_models.DatasetVersion.version == version))
-    if item is None:
+def get_dataset(version: str, _principal: Reader, session: DatabaseSession) -> dict[str, object]:
+    try:
+        item = resolve_dataset_version(session, version)
+    except UnknownDatasetVersion:
         raise HTTPException(status_code=404, detail="Dataset version not found")
+    except AmbiguousDatasetVersion as exc:
+        raise HTTPException(status_code=409, detail="Dataset version label is ambiguous; use dataset_version_id") from exc
     snapshot_count = len(session.scalars(select(database_models.WorkOrderSnapshot.snapshot_id).where(database_models.WorkOrderSnapshot.dataset_version_id == item.dataset_version_id)).all())
-    return {"dataset_version_id": item.dataset_version_id, "dataset_id": item.dataset_id, "version": item.version, "row_count": item.row_count, "snapshot_count": snapshot_count, "content_hash": item.content_hash, "created_at": item.created_at}
+    ingestion_runs = session.scalars(select(database_models.IngestionRun).where(
+        database_models.IngestionRun.dataset_version_id == item.dataset_version_id
+    )).all()
+    if len(ingestion_runs) > 1:
+        raise HTTPException(status_code=409, detail="Dataset version has multiple ingestion runs")
+    ingestion = ingestion_runs[0] if ingestion_runs else None
+    attempts = session.scalars(select(database_models.IngestionAttempt).where(
+        database_models.IngestionAttempt.dataset_version_id == item.dataset_version_id
+    ).order_by(database_models.IngestionAttempt.started_at)).all()
+    quarantined = ingestion.rejected_rows if ingestion else 0
+    source_count = (ingestion.ingested_rows + quarantined) if ingestion else item.row_count
+    return {"dataset_version_id": item.dataset_version_id, "dataset_id": item.dataset_id, "version": item.version, "row_count": item.row_count, "source_row_count": source_count, "clean_row_count": snapshot_count, "quarantined_row_count": quarantined, "snapshot_count": snapshot_count, "content_hash": item.content_hash, "source_hash_version": item.source_hash_version, "ingestion_status": ingestion.status if ingestion else None, "ingestion_attempt_count": len(attempts), "last_ingestion_attempt_status": attempts[-1].status if attempts else None, "created_at": item.created_at}
 
 
 @router.post("/ai/requirements/analyze", response_model=RequirementAnalysis)
-def analyze_requirement(request: RequirementRequest, session: DatabaseSession) -> RequirementAnalysis:
-    return _ai_workflow(session).analyze_requirement(request.requirement)
+def analyze_requirement(
+    request: RequirementRequest,
+    principal: AIController,
+    session: DatabaseSession,
+    response: Response,
+    idempotency_key: IdempotencyKey = None,
+) -> RequirementAnalysis:
+    workflow = _ai_workflow(session)
+    return _execute_idempotent_ai(
+        session=session, principal=principal, idempotency_key=idempotency_key,
+        operation_type="REQUIREMENT_ANALYSIS", target_resource="direct",
+        payload=request.model_dump(mode="json"), response=response,
+        execute=lambda _claim: workflow.analyze_requirement(request.requirement),
+        ai_run_id=lambda: workflow.last_run_id,
+    )
 
 
 @router.post("/ai/tests/generate", response_model=GeneratedTestSuite)
-def generate_tests(request: TestGenerationRequest, session: DatabaseSession) -> GeneratedTestSuite:
-    return _ai_workflow(session).generate_tests(request.requirement, request.analysis)
+def generate_tests(
+    request: TestGenerationRequest,
+    principal: AIController,
+    session: DatabaseSession,
+    response: Response,
+    idempotency_key: IdempotencyKey = None,
+) -> GeneratedTestSuite:
+    workflow = _ai_workflow(session)
+    return _execute_idempotent_ai(
+        session=session, principal=principal, idempotency_key=idempotency_key,
+        operation_type="TEST_GENERATION", target_resource="direct",
+        payload=request.model_dump(mode="json"), response=response,
+        execute=lambda _claim: workflow.generate_tests(request.requirement, request.analysis),
+        ai_run_id=lambda: workflow.last_run_id,
+    )
 
 
 @router.post("/ai/dq-rules/generate", response_model=RuleDraft)
-def generate_dq_rule(request: RequirementRequest, session: DatabaseSession) -> RuleDraft:
-    return _ai_workflow(session).generate_rule(request.requirement)
+def generate_dq_rule(
+    request: RequirementRequest,
+    principal: AIController,
+    session: DatabaseSession,
+    response: Response,
+    idempotency_key: IdempotencyKey = None,
+) -> RuleDraft:
+    workflow = _ai_workflow(session)
+    return _execute_idempotent_ai(
+        session=session, principal=principal, idempotency_key=idempotency_key,
+        operation_type="DQ_RULE_GENERATION", target_resource="direct",
+        payload=request.model_dump(mode="json"), response=response,
+        execute=lambda _claim: workflow.generate_rule(request.requirement),
+        ai_run_id=lambda: workflow.last_run_id,
+    )
 
 
 @router.post("/ai/rca/analyze", response_model=AIRootCauseAnalysis)
-def analyze_root_cause(request: RCARequest, session: DatabaseSession) -> AIRootCauseAnalysis:
-    return _ai_workflow(session).analyze_rca(request.evidence)
+def analyze_root_cause(
+    request: RCARequest,
+    principal: AIController,
+    session: DatabaseSession,
+    response: Response,
+    idempotency_key: IdempotencyKey = None,
+) -> AIRootCauseAnalysis:
+    workflow = _ai_workflow(session)
+
+    def execute(_claim: OperationClaim | None) -> AIRootCauseAnalysis:
+        try:
+            return workflow.analyze_rca(request.evidence)
+        except RCAEvidenceValidationError as exc:
+            raise HTTPException(
+                status_code=422,
+                detail={"code": exc.code, "message": str(exc), "diagnostics": exc.diagnostics},
+            ) from exc
+        except RCAProviderError as exc:
+            raise HTTPException(
+                status_code=502,
+                detail={"code": exc.code, "message": str(exc), "diagnostics": exc.diagnostics},
+            ) from exc
+
+    return _execute_idempotent_ai(
+        session=session, principal=principal, idempotency_key=idempotency_key,
+        operation_type="RCA_ANALYSIS", target_resource="direct",
+        payload=request.model_dump(mode="json"), response=response,
+        execute=execute, ai_run_id=lambda: workflow.last_run_id,
+    )
 
 
 @router.post("/requirements/import/jira")
-def import_jira_requirement(request: JiraImportRequest, session: DatabaseSession) -> dict[str, object]:
-    record = _testing_workflow(session).import_requirement(request.issue_key)
+def import_jira_requirement(request: JiraImportRequest, principal: JiraRequirementOperator, session: DatabaseSession) -> dict[str, object]:
+    try:
+        record = _testing_workflow(session).import_requirement(
+            request.issue_key,
+            actor_principal_id=principal.principal_id,
+        )
+    except ExternalSyncUnavailable as exc:
+        raise HTTPException(
+            status_code=502,
+            detail={"code": "EXTERNAL_SYNC_UNAVAILABLE", "message": str(exc)},
+        ) from exc
     return {"requirement_version_id": record.requirement_version_id, "requirement_id": record.requirement_id, "version": record.version, "external_reference": record.external_reference}
 
 
 @router.post("/requirements/{requirement_version_id}/analyze")
-def analyze_persisted_requirement(requirement_version_id: str, session: DatabaseSession) -> dict:
-    try:
-        return _testing_workflow(session).analyze(requirement_version_id)
-    except KeyError as exc:
-        raise HTTPException(status_code=404, detail="Requirement version not found") from exc
+def analyze_persisted_requirement(
+    requirement_version_id: str,
+    principal: RequirementAIController,
+    session: DatabaseSession,
+    response: Response,
+    idempotency_key: IdempotencyKey = None,
+) -> dict:
+    workflow = _testing_workflow(session)
+
+    def execute(_claim: OperationClaim | None) -> dict:
+        try:
+            return workflow.analyze(
+                requirement_version_id,
+                lambda: ensure_ai_concurrency_protected(principal),
+            )
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="Requirement version not found") from exc
+
+    return _execute_idempotent_ai(
+        session=session, principal=principal, idempotency_key=idempotency_key,
+        operation_type="PERSISTED_REQUIREMENT_ANALYSIS", target_resource=requirement_version_id,
+        payload={"requirement_version_id": requirement_version_id}, response=response,
+        execute=execute, ai_run_id=lambda: workflow.ai.last_run_id,
+    )
 
 
 @router.post("/requirements/{requirement_version_id}/generate-tests")
-def generate_persisted_tests(requirement_version_id: str, session: DatabaseSession) -> dict:
-    try:
-        return _testing_workflow(session).generate_tests(requirement_version_id)
-    except KeyError as exc:
-        raise HTTPException(status_code=404, detail="Requirement version not found") from exc
-    except WorkflowConflict as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+def generate_persisted_tests(
+    requirement_version_id: str,
+    principal: RequirementAIController,
+    session: DatabaseSession,
+    response: Response,
+    idempotency_key: IdempotencyKey = None,
+) -> dict:
+    workflow = _testing_workflow(session)
+
+    def execute(claim: OperationClaim | None) -> dict:
+        try:
+            return workflow.generate_tests(
+                requirement_version_id,
+                actor_principal_id=principal.principal_id,
+                ai_operation_id=claim.operation_id if claim else None,
+                before_side_effects=lambda: ensure_ai_concurrency_protected(principal),
+            )
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="Requirement version not found") from exc
+        except WorkflowConflict as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    return _execute_idempotent_ai(
+        session=session, principal=principal, idempotency_key=idempotency_key,
+        operation_type="PERSISTED_TEST_GENERATION", target_resource=requirement_version_id,
+        payload={"requirement_version_id": requirement_version_id}, response=response,
+        execute=execute, ai_run_id=lambda: workflow.ai.last_run_id,
+    )
 
 
 @router.get("/reviews/{review_id}")
-def get_review(review_id: str, session: DatabaseSession) -> dict[str, object]:
+def get_review(review_id: str, _principal: Reader, session: DatabaseSession) -> dict[str, object]:
     review = session.get(database_models.ReviewRequest, review_id)
     if review is None:
         raise HTTPException(status_code=404, detail="Review not found")
@@ -240,19 +620,25 @@ def get_review(review_id: str, session: DatabaseSession) -> dict[str, object]:
 
 
 @router.post("/reviews/{review_id}/sync")
-def sync_review(review_id: str, session: DatabaseSession) -> dict[str, object]:
+def sync_review(review_id: str, principal: JiraReviewer, session: DatabaseSession) -> dict[str, object]:
     try:
+        _bind_reviewer(session, review_id, principal)
         review = _testing_workflow(session).sync_review(review_id)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Review not found") from exc
+    except WorkflowConflict as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ExternalSyncUnavailable as exc:
+        raise HTTPException(
+            status_code=502,
+            detail={"code": "EXTERNAL_SYNC_UNAVAILABLE", "message": str(exc)},
+        ) from exc
     return {"review_id": review.review_id, "status": review.status, "artifact_ids": review.artifact_ids}
 
 
 @router.post("/reviews/{review_id}/start")
-def start_review(review_id: str, session: DatabaseSession) -> dict[str, object]:
-    review = session.get(database_models.ReviewRequest, review_id)
-    if review is None:
-        raise HTTPException(status_code=404, detail="Review not found")
+def start_review(review_id: str, principal: Reviewer, session: DatabaseSession) -> dict[str, object]:
+    review = _bind_reviewer(session, review_id, principal)
     review.review_started_at = datetime.now(timezone.utc)
     review.active_review_seconds = None
     session.flush()
@@ -260,10 +646,8 @@ def start_review(review_id: str, session: DatabaseSession) -> dict[str, object]:
 
 
 @router.post("/reviews/{review_id}/assessment")
-def complete_review_assessment(review_id: str, request: ReviewAssessmentRequest, session: DatabaseSession) -> dict[str, object]:
-    review = session.get(database_models.ReviewRequest, review_id)
-    if review is None:
-        raise HTTPException(status_code=404, detail="Review not found")
+def complete_review_assessment(review_id: str, request: ReviewAssessmentRequest, principal: Reviewer, session: DatabaseSession) -> dict[str, object]:
+    review = _bind_reviewer(session, review_id, principal)
     if review.review_started_at is None:
         raise HTTPException(status_code=409, detail="Review timing has not been started")
     completed_at = datetime.now(timezone.utc)
@@ -284,33 +668,42 @@ def complete_review_assessment(review_id: str, request: ReviewAssessmentRequest,
 
 
 @router.post("/reviews/{review_id}/decision")
-def decide_local_review(review_id: str, request: ReviewDecisionRequest, session: DatabaseSession) -> dict[str, object]:
+def decide_local_review(review_id: str, request: ReviewDecisionRequest, principal: Reviewer, session: DatabaseSession) -> dict[str, object]:
+    review = _bind_reviewer(session, review_id, principal, claimed_reviewer=request.reviewer)
     tracker = _issue_tracker()
     if not isinstance(tracker, LocalIssueTracker):
         raise HTTPException(status_code=409, detail="Review decisions must be made in the configured external issue tracker")
-    review = session.get(database_models.ReviewRequest, review_id)
-    if review is None:
-        raise HTTPException(status_code=404, detail="Review not found")
     link = session.scalar(select(database_models.ExternalIssueLink).where(database_models.ExternalIssueLink.artifact_type == "REVIEW", database_models.ExternalIssueLink.artifact_id == review_id))
     if link is None:
         raise HTTPException(status_code=409, detail="Review has no issue link")
     tracker.set_issue_status(link.issue_key, request.status)
-    review.reviewer = request.reviewer
     review.review_comment = request.comment
     synced = _testing_workflow(session).sync_review(review_id)
+    log_security_event(
+        "review_decision",
+        principal_id=principal.principal_id,
+        reason="administrator_override" if "administrator" in principal.roles else "reviewer_decision",
+    )
     return {"review_id": synced.review_id, "status": synced.status, "artifact_ids": synced.artifact_ids}
 
 
-@router.post("/test-runs")
-def launch_test_run(request: TestRunRequest, session: DatabaseSession) -> dict:
+@router.post("/test-runs", response_model=TestRunResponse)
+def launch_test_run(request: TestRunRequest, principal: TestSubmitter, session: DatabaseSession) -> dict:
+    """Validate complete caller-submitted results; this does not execute test steps."""
     try:
-        return _testing_workflow(session).execute(request.requirement_version_id, request.test_case_version_ids, request.actuals, request.dataset_version)
+        return _testing_workflow(session).execute(
+            request.requirement_version_id,
+            request.test_case_version_ids,
+            request.actuals,
+            request.dataset_version,
+            actor_principal_id=principal.principal_id,
+        )
     except WorkflowConflict as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @router.get("/traceability/requirements/{requirement_version_id}")
-def requirement_traceability(requirement_version_id: str, session: DatabaseSession) -> dict:
+def requirement_traceability(requirement_version_id: str, _principal: Reader, session: DatabaseSession) -> dict:
     try:
         return _testing_workflow(session).traceability(requirement_version_id)
     except KeyError as exc:
@@ -318,7 +711,7 @@ def requirement_traceability(requirement_version_id: str, session: DatabaseSessi
 
 
 @router.get("/ai-value/experiments")
-def list_ai_value_experiments(session: DatabaseSession) -> list[dict[str, object]]:
+def list_ai_value_experiments(_principal: Reader, session: DatabaseSession) -> list[dict[str, object]]:
     runs = session.scalars(select(database_models.EvaluationRun).order_by(database_models.EvaluationRun.created_at.desc())).all()
     return [{
         "experiment_id": run.evaluation_run_id, "experiment": run.experiment_group,
@@ -328,10 +721,50 @@ def list_ai_value_experiments(session: DatabaseSession) -> list[dict[str, object
     } for run in runs]
 
 
+@router.get("/ai-operations/{operation_id}")
+def get_ai_operation_status(
+    operation_id: str,
+    principal: Reader,
+    session: DatabaseSession,
+) -> dict[str, object]:
+    operation = AIOperationStore(session).status(operation_id, principal.principal_id)
+    if operation is None:
+        raise HTTPException(status_code=404, detail="AI operation not found")
+    review = session.scalar(select(database_models.ReviewRequest).where(
+        database_models.ReviewRequest.ai_operation_id == operation_id
+    ))
+    return {
+        "operation_id": operation.operation_id,
+        "operation_type": operation.operation_type,
+        "target_resource": operation.target_resource,
+        "state": operation.state,
+        "ai_run_id": operation.ai_run_id,
+        "review_id": review.review_id if review else None,
+        "created_at": operation.created_at,
+        "completed_at": operation.completed_at,
+        "recovery": (
+            "MANUAL_RECONCILIATION_REQUIRED"
+            if operation.state in {AIOperationState.RUNNING.value, AIOperationState.AMBIGUOUS.value}
+            else "NONE"
+        ),
+    }
+
+
 @router.post("/external-sync/{link_id}/retry")
-def retry_external_sync(link_id: int, session: DatabaseSession) -> dict[str, object]:
+def retry_external_sync(link_id: int, principal: SyncOperator, session: DatabaseSession) -> dict[str, object]:
     try:
-        link = _testing_workflow(session).retry_external_sync(link_id)
+        link = _testing_workflow(session).retry_external_sync(
+            link_id,
+            actor_principal_id=principal.principal_id,
+        )
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="External sync record not found") from exc
-    return {"link_id": link.link_id, "issue_key": link.issue_key, "sync_status": link.sync_status, "sync_error": link.sync_error, "retry_count": link.retry_count}
+    except WorkflowConflict as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return {
+        "link_id": link.link_id,
+        "issue_key": link.issue_key,
+        "sync_status": link.sync_status,
+        "sync_error": link.sync_error,
+        "retry_count": link.retry_count,
+    }

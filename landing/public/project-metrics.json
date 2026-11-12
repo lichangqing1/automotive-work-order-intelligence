@@ -56,9 +56,24 @@
     "baselineSeconds": 77.6,
     "aiSeconds": 49.41111111111111,
     "checkUsefulness": 0.7555555555555555,
-    "evidenceSupport": 0.9451851851851851,
-    "rootCauseAccuracy": 0.0,
-    "failureClassAccuracy": 0.0
+    "historicalV1": {
+      "evidence_support_rate": 0.9451851851851851,
+      "unsupported_claim_rate": 0.054814814814814816,
+      "root_cause_accuracy": 0.0,
+      "quality_gate": "BLOCK"
+    },
+    "correctedV2": {
+      "citation_validity_rate": 0.9,
+      "evidence_correctness_rate": 0.845185,
+      "evidence_support_rate": 0.133333,
+      "unsupported_claim_rate": 0.766667,
+      "correct_abstention": 0.133333,
+      "failure_class_accuracy": 0.0,
+      "root_cause_accuracy": 0.0,
+      "quality_gate": "BLOCK"
+    },
+    "scoringVersion": "rca-metrics-v2",
+    "provenance": "docs/reports/RCA_METRIC_INTEGRITY_V2_COMPARISON.md"
   },
   "technology": [
     "Python",

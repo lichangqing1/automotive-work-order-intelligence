@@ -11,15 +11,22 @@ jobs:
       postgres:
         image: postgres:16-alpine
         env:
-          POSTGRES_DB: automotive_test
+          POSTGRES_DB: automotive_verify
           POSTGRES_USER: automotive
           POSTGRES_PASSWORD: automotive
         ports: ["5432:5432"]
         options: >-
-          --health-cmd "pg_isready -U automotive -d automotive_test"
+          --health-cmd "pg_isready -U automotive -d automotive_verify"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
           --health-interval 5s --health-timeout 3s --health-retries 10
     env:
-      DATABASE_URL: postgresql+psycopg://automotive:automotive@localhost:5432/automotive_test
+      DATABASE_URL: postgresql+psycopg://automotive:automotive@localhost:5432/automotive_verify
+      REDIS_TEST_URL: redis://localhost:6379/15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -34,13 +41,21 @@ jobs:
           alembic upgrade head
           alembic current
           alembic check
+      - name: Required PostgreSQL integration tests
+        run: |
+          pytest -m postgres --junitxml=postgres-integration.xml -q
+          python -c "import xml.etree.ElementTree as ET; s=ET.parse('postgres-integration.xml').getroot().findall('testsuite'); assert s and sum(int(x.attrib['tests']) for x in s) > 0 and all(sum(int(x.attrib[k]) for x in s) == 0 for k in ('failures', 'errors', 'skipped')), [x.attrib for x in s]"
+      - name: Required Redis integration tests
+        run: |
+          pytest -m redis --junitxml=redis-integration.xml -q
+          python -c "import xml.etree.ElementTree as ET; s=ET.parse('redis-integration.xml').getroot().findall('testsuite'); assert s and sum(int(x.attrib['tests']) for x in s) > 0 and all(sum(int(x.attrib[k]) for x in s) == 0 for k in ('failures', 'errors', 'skipped')), [x.attrib for x in s]"
       - name: Unit, integration, API, and regression tests
         run: pytest --cov=automotive_quality --cov=automotive --cov-report=term-missing -q
       - name: AI regression evaluation and policies
         run: python scripts/run_ai_evaluation.py
       - name: Reset ephemeral database for runtime smoke build
         run: |
-          PGPASSWORD=automotive psql -h localhost -U automotive -d automotive_test -c 'DROP SCHEMA public CASCADE; CREATE SCHEMA public;'
+          PGPASSWORD=automotive psql -h localhost -U automotive -d automotive_verify -c 'DROP SCHEMA public CASCADE; CREATE SCHEMA public;'
           alembic upgrade head
       - name: Authoritative enterprise runtime smoke build
         run: python scripts/run_enterprise_platform.py --rows 1000 --dataset-version ci-smoke
@@ -50,6 +65,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: docker build -t automotive-quality-platform:test .
+
+  dependency-security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: python -m pip install -e '.[dev,security]'
+      - run: pip-audit
 
   landing:
     runs-on: ubuntu-latest

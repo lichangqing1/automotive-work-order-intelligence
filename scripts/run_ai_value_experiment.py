@@ -4,6 +4,7 @@ import argparse
 import json
 import os
 import time
+from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
@@ -14,6 +15,7 @@ from automotive_quality.domains.ai.providers.openai import OpenAIProvider
 from automotive_quality.domains.ai.schemas import AIRootCauseAnalysis, GeneratedTestSuite
 from automotive_quality.domains.ai.workflows import AIWorkflowService
 from automotive_quality.domains.evaluation.ai_value import (
+    RCA_METRIC_VERSION,
     HumanTestDesignMeasurement,
     RCACase,
     RCAReview,
@@ -25,6 +27,7 @@ from automotive_quality.domains.evaluation.ai_value import (
     rca_metrics,
     suggested_coverage,
     test_generation_metrics,
+    validate_generated_test_identities,
     write_json,
     write_jsonl,
 )
@@ -112,13 +115,11 @@ def main() -> None:
         report, raw, review_queue = run_test_generation(args, source_raw)
     else:
         report, raw, review_queue = run_rca(args, source_raw)
-    review_complete = report["review_completeness"]["complete"]
-    baseline_complete = args.experiment == "rca" or report["human_baseline_completeness"]["complete"]
-    config["publishable"] = bool(
-        args.provider == "openai"
-        and args.score_run
-        and review_complete
-        and baseline_complete
+    config["publishable"] = publication_eligible(
+        args.provider,
+        bool(args.score_run),
+        args.experiment,
+        report,
     )
     write_json(output / "configuration.json", config)
     report["experiment"] = config
@@ -136,6 +137,8 @@ def run_test_generation(args: argparse.Namespace, source_raw: list[dict] | None 
     cases = load_jsonl(args.dataset, RequirementCase)
     reviews = load_jsonl(args.reviews, TestReview) if args.reviews else []
     human_measurements = load_jsonl(args.human_baseline, HumanTestDesignMeasurement) if args.human_baseline else []
+    validate_unique_test_reviews(reviews)
+    validate_unique_human_measurements(human_measurements)
     review_index: dict[tuple[str, str, int], list[TestReview]] = {}
     for review in reviews:
         review_index.setdefault((review.variant, review.case_id, review.run_number), []).append(review)
@@ -150,6 +153,12 @@ def run_test_generation(args: argparse.Namespace, source_raw: list[dict] | None 
 
     for benchmark in cases:
         baseline = generate_template_tests(benchmark.requirement)
+        validate_generated_test_identities(
+            baseline,
+            variant="deterministic_baseline",
+            case_id=benchmark.requirement_id,
+            run_number=1,
+        )
         baseline_map = suggested_coverage(baseline, benchmark.gold)
         baseline_reviews = review_index.get(("deterministic_baseline", benchmark.requirement_id, 1), [])
         baseline_coverage = {item.test_id: item.validated_coverage for item in baseline_reviews} or baseline_map
@@ -179,6 +188,12 @@ def run_test_generation(args: argparse.Namespace, source_raw: list[dict] | None 
             else:
                 suite = generate_template_tests(benchmark.requirement)
                 generation_seconds = time.perf_counter() - generation_started
+            validate_generated_test_identities(
+                suite,
+                variant="ai_assisted",
+                case_id=benchmark.requirement_id,
+                run_number=run_number,
+            )
             suggestions = suggested_coverage(suite, benchmark.gold)
             raw.append({"variant": "ai_assisted" if args.provider == "openai" else "mock_regression", "case_id": benchmark.requirement_id, "run_number": run_number, "generation_seconds": generation_seconds, "output": suite.model_dump(mode="json"), "suggested_coverage": suggestions})
             reviewed = review_index.get(("ai_assisted", benchmark.requirement_id, run_number))
@@ -230,6 +245,7 @@ def run_test_generation(args: argparse.Namespace, source_raw: list[dict] | None 
 def run_rca(args: argparse.Namespace, source_raw: list[dict] | None = None) -> tuple[dict, list[dict], list[dict]]:
     cases = load_jsonl(args.dataset, RCACase)
     reviews = load_jsonl(args.reviews, RCAReview) if args.reviews else []
+    validate_unique_rca_reviews(reviews)
     review_index = {(item.case_id, item.run_number): item for item in reviews}
     baseline_rows: list[dict[str, float]] = []
     ai_rows: list[dict[str, float]] = []
@@ -270,43 +286,138 @@ def run_rca(args: argparse.Namespace, source_raw: list[dict] | None = None) -> t
         "baseline": aggregate(baseline_rows), "ai_assisted": aggregate(ai_rows),
         "reviewed": review_completeness["complete"],
         "review_completeness": review_completeness,
+        "metric_version": RCA_METRIC_VERSION,
     }
     report["difference_ai_minus_baseline"] = mean_differences(report["baseline"], report["ai_assisted"])
     return report, raw, queue
 
 
 def test_review_completeness(queue: list[dict], reviews: list[TestReview]) -> dict:
-    expected = {(item["variant"], item["case_id"], item["run_number"], item["test_id"]) for item in queue}
+    expected = [(item["variant"], item["case_id"], item["run_number"], item["test_id"]) for item in queue]
     actual = [(item.variant, item.case_id, item.run_number, item.test_id) for item in reviews]
-    actual_set = set(actual)
-    return completeness_summary(expected, actual, actual_set)
+    return completeness_summary(
+        expected,
+        actual,
+        identity_fields=("variant", "case_id", "run_number", "test_id"),
+    )
 
 
 def rca_review_completeness(queue: list[dict], reviews: list[RCAReview]) -> dict:
-    expected = {(item["case_id"], item["run_number"]) for item in queue}
+    expected = [(item["case_id"], item["run_number"]) for item in queue]
     actual = [(item.case_id, item.run_number) for item in reviews]
-    actual_set = set(actual)
-    return completeness_summary(expected, actual, actual_set)
+    return completeness_summary(expected, actual, identity_fields=("case_id", "run_number"))
 
 
 def human_baseline_completeness(
     cases: list[RequirementCase], measurements: list[HumanTestDesignMeasurement],
 ) -> dict:
-    expected = {(item.requirement_id,) for item in cases}
+    expected = [(item.requirement_id,) for item in cases]
     actual = [(item.case_id,) for item in measurements]
-    return completeness_summary(expected, actual, set(actual))
+    return completeness_summary(expected, actual, identity_fields=("case_id",))
 
 
-def completeness_summary(expected: set[tuple], actual: list[tuple], actual_set: set[tuple]) -> dict:
-    duplicates = len(actual) - len(actual_set)
-    missing = expected - actual_set
-    unexpected = actual_set - expected
+def completeness_summary(
+    expected: list[tuple],
+    actual: list[tuple],
+    *,
+    identity_fields: tuple[str, ...],
+) -> dict:
+    expected_counts = Counter(expected)
+    actual_counts = Counter(actual)
+    expected_duplicates = sum(count - 1 for count in expected_counts.values())
+    duplicates = sum(count - 1 for count in actual_counts.values())
+    missing = expected_counts - actual_counts
+    unexpected = Counter({identity: count for identity, count in actual_counts.items() if identity not in expected_counts})
+    validation_errors = _completeness_errors(
+        expected_counts,
+        actual_counts,
+        missing,
+        unexpected,
+        identity_fields,
+    )
     return {
-        "complete": not missing and not unexpected and duplicates == 0,
-        "expected_count": len(expected), "actual_count": len(actual),
-        "missing_count": len(missing), "unexpected_count": len(unexpected),
+        "complete": not missing and not unexpected and duplicates == 0 and expected_duplicates == 0,
+        "expected_count": len(expected),
+        "actual_count": len(actual),
+        "missing_count": sum(missing.values()),
+        "unexpected_count": sum(unexpected.values()),
         "duplicate_count": duplicates,
+        "expected_duplicate_count": expected_duplicates,
+        "validation_errors": validation_errors,
     }
+
+
+def validate_unique_test_reviews(reviews: list[TestReview]) -> None:
+    identities = [(item.variant, item.case_id, item.run_number, item.test_id) for item in reviews]
+    _raise_duplicate_identities(
+        identities,
+        ("variant", "case_id", "run_number", "test_id"),
+        "submitted test review",
+    )
+
+
+def validate_unique_rca_reviews(reviews: list[RCAReview]) -> None:
+    identities = [(item.case_id, item.run_number) for item in reviews]
+    _raise_duplicate_identities(identities, ("case_id", "run_number"), "submitted RCA review")
+
+
+def validate_unique_human_measurements(measurements: list[HumanTestDesignMeasurement]) -> None:
+    identities = [(item.case_id,) for item in measurements]
+    _raise_duplicate_identities(identities, ("case_id",), "human-only measurement")
+
+
+def _raise_duplicate_identities(
+    identities: list[tuple],
+    identity_fields: tuple[str, ...],
+    record_type: str,
+) -> None:
+    counts = Counter(identities)
+    duplicates = sorted(identity for identity, count in counts.items() if count > 1)
+    if duplicates:
+        rendered = "; ".join(_format_identity(identity_fields, identity) for identity in duplicates)
+        raise ValueError(f"Duplicate {record_type} identity: {rendered}")
+
+
+def _completeness_errors(
+    expected_counts: Counter,
+    actual_counts: Counter,
+    missing: Counter,
+    unexpected: Counter,
+    identity_fields: tuple[str, ...],
+) -> list[str]:
+    errors: list[str] = []
+    for identity in sorted(expected_counts):
+        if expected_counts[identity] > 1:
+            errors.append(
+                f"duplicate expected review identity ({_format_identity(identity_fields, identity)}), "
+                f"count={expected_counts[identity]}"
+            )
+    for identity in sorted(actual_counts):
+        if actual_counts[identity] > 1:
+            errors.append(
+                f"duplicate submitted review identity ({_format_identity(identity_fields, identity)}), "
+                f"count={actual_counts[identity]}"
+            )
+    for identity in sorted(missing):
+        errors.append(
+            f"missing review identity ({_format_identity(identity_fields, identity)}), count={missing[identity]}"
+        )
+    for identity in sorted(unexpected):
+        errors.append(
+            f"unexpected review identity ({_format_identity(identity_fields, identity)}), "
+            f"count={unexpected[identity]}"
+        )
+    return errors
+
+
+def _format_identity(identity_fields: tuple[str, ...], identity: tuple) -> str:
+    return ", ".join(f"{field}={value}" for field, value in zip(identity_fields, identity, strict=True))
+
+
+def publication_eligible(provider: str, score_run: bool, experiment: str, report: dict) -> bool:
+    review_complete = report["review_completeness"]["complete"]
+    baseline_complete = experiment == "rca" or report["human_baseline_completeness"]["complete"]
+    return provider == "openai" and score_run and review_complete and baseline_complete
 
 
 def mean_differences(baseline: dict, ai: dict) -> dict[str, float]:

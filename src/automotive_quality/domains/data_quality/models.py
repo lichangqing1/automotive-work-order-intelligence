@@ -6,7 +6,7 @@ from enum import StrEnum
 from typing import Any
 
 import pandas as pd
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class RuleStatus(StrEnum):
@@ -30,8 +30,10 @@ class Severity(StrEnum):
 
 
 class DQRule(BaseModel):
-    name: str
-    type: str
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(min_length=1, max_length=128)
+    type: str = Field(min_length=1, max_length=64)
     version: int = Field(default=1, ge=1)
     scope: RuleScope = RuleScope.ROW
     severity: Severity = Severity.WARNING

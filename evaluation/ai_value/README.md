@@ -29,7 +29,18 @@ results. `human_only_measurements.example.jsonl` is a schema example, not
 evidence. A publishable test-generation score run requires one real human-only
 measurement for every benchmark requirement.
 
-RCA reporting distinguishes citation validity (the evidence ID exists) from
-evidence correctness (the cited ID belongs to the human-authored supporting
-evidence set). Only evidence correctness contributes to
-`evidence_support_rate` and `unsupported_claim_rate`.
+RCA identity scoring uses normalized exact labels only. A case can declare
+curated `equivalent_root_causes`; no substring or implicit paraphrase matching
+is performed, and every predicted cause must be in the accepted set. Missing
+ground truth cannot earn root-cause accuracy and is handled by
+`correct_abstention`.
+
+RCA reporting distinguishes citation validity (a distinct claim/evidence ID
+pair exists in the case), evidence correctness (the ID belongs to the
+human-authored supporting set), evidence support (the assertion has at least
+one correct claim-level citation and any asserted root cause is correct), and
+unsupported claims (assertions without that support). Duplicate references do
+not add weight. Uncited assertions score zero. No-claim responses receive
+vacuous evidence scores only for a correct explicit abstention. The supporting
+set verifies the benchmark's structural mapping, not semantic entailment of
+arbitrary generated prose.

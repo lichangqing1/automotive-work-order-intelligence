@@ -107,7 +107,34 @@ class AIRunRepository:
         self.session = session
 
     def save(self, **values: Any) -> str:
-        record = models.AIRun(**values)
-        self.session.add(record)
-        self.session.flush()
-        return record.run_id
+        try:
+            with Session(self._audit_bind()) as audit:
+                record = models.AIRun(**values)
+                audit.add(record)
+                audit.commit()
+                return record.run_id
+        except Exception as exc:
+            raise AIRunAuditPersistenceError("AI run audit persistence failed") from exc
+
+    def mark_failed(self, run_id: str, **values: Any) -> None:
+        try:
+            with Session(self._audit_bind()) as audit:
+                record = audit.get(models.AIRun, run_id)
+                if record is None:
+                    raise LookupError("AI run audit record is missing")
+                record.status = "FAILED"
+                record.output = {}
+                record.schema_valid = False
+                for key, value in values.items():
+                    setattr(record, key, value)
+                audit.commit()
+        except Exception as exc:
+            raise AIRunAuditPersistenceError("AI run audit persistence failed") from exc
+
+    def _audit_bind(self):
+        bind = self.session.get_bind()
+        return getattr(bind, "engine", bind)
+
+
+class AIRunAuditPersistenceError(RuntimeError):
+    pass

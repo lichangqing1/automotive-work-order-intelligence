@@ -54,6 +54,25 @@ def test_rca_rejects_unsupported_claims() -> None:
         AIRootCauseAnalysis(failure_class="OTA", probable_root_causes=["Bad package"], supporting_evidence=[], recommended_checks=[], confidence=0.8, insufficient_evidence=False)
 
 
+def test_rca_rejects_fabricated_provider_evidence_reference() -> None:
+    provider = MockProvider({
+        AIRootCauseAnalysis: {
+            "failure_class": "OTA_COMPATIBILITY",
+            "probable_root_causes": ["unsupported_software_version"],
+            "supporting_evidence": ["EV-999"],
+            "recommended_checks": ["Verify compatibility"],
+            "confidence": 0.8,
+            "insufficient_evidence": False,
+            "claims": [{"claim": "unsupported_software_version", "evidence_ids": ["EV-999"]}],
+        },
+    })
+
+    with pytest.raises(Exception, match="unknown evidence"):
+        AIWorkflowService(provider).analyze_rca({
+            "evidence_items": [{"id": "EV-1", "fact": "Version 6.2 is unsupported."}],
+        })
+
+
 def test_malformed_provider_output_fails_validation() -> None:
     with pytest.raises(ValidationError):
         AIWorkflowService(MockProvider({RequirementAnalysis: {"risks": []}})).analyze_requirement("anything")
