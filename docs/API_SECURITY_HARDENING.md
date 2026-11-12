@@ -53,15 +53,27 @@ origins cannot be combined with credentials. `/health/live` remains minimal and
 public; `/health/ready` remains authenticated, authorized, and rate limited.
 The legacy `automotive.api` module refuses to load outside local development.
 
-## Distributed-control limitation
+## Durable AI operations and distributed-control limitation
 
-AI lease loss is detected before the HTTP response, so the client receives 503
-instead of a protected-success claim. The provider call, AI audit write, or
-workflow persistence may already have completed before that detection. The 503
-does not provide distributed fencing or automatic side-effect rollback, and a
-client retry can invoke the provider again. A future C1.6 design should add
-operation-level idempotency keys and fencing around side-effecting provider
-workflows rather than treating HTTP failure as rollback.
+Provider-backed routes create a durable operation claim before provider
+invocation. The stable identity combines the authenticated principal,
+operation type, target resource, and caller-supplied `Idempotency-Key`; a
+canonical request hash prevents the key from being reused for different
+content. A completed operation replays its stored response without invoking the
+provider or recreating linked reviews and Jira synchronization records.
+
+Lease loss and provider timeouts record the operation as `AMBIGUOUS` and return
+a sanitized recovery response containing the operation identifier. Clients
+must inspect the authenticated operation-status endpoint and must not
+automatically retry `RUNNING`, `FAILED`, or `AMBIGUOUS` operations with a new
+key. See [durable AI operation idempotency](AI_OPERATION_IDEMPOTENCY.md) for the
+state and reconciliation rules.
+
+These controls prevent duplicate application execution under the tested retry
+and concurrency conditions, but they do not guarantee exactly-once provider
+execution or billing across arbitrary process or network failure. Provider
+work may have completed before the application can durably record the outcome,
+and PostgreSQL, Redis, and external providers do not share one transaction.
 
 ## Security events and dependencies
 
