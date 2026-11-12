@@ -4,6 +4,8 @@ import hashlib
 import json
 import os
 
+import pytest
+
 # A developer's .env may intentionally enable live Jira/OpenAI integrations.
 # The default test suite must remain offline; opt-in integration tests construct
 # their real clients directly from the dedicated environment variables.
@@ -43,3 +45,39 @@ os.environ["API_AUTH_PRINCIPALS_JSON"] = json.dumps([
     _test_principal("pytest-administrator", "administrator", TEST_ADMIN_TOKEN),
     _test_principal("pytest-dual-role", ["operator", "reviewer"], TEST_DUAL_ROLE_TOKEN),
 ])
+
+from automotive_quality.api.main import app
+from automotive_quality.api.rate_limits import Admission, get_rate_limiter
+
+
+class _TestLease:
+    renewal_failed = False
+
+    def start(self) -> None:
+        return None
+
+    def release(self) -> None:
+        return None
+
+
+class _UnlimitedTestRateLimiter:
+    def admit(self, principal_id, category) -> Admission:
+        del principal_id, category
+        return Admission(allowed=True, retry_after_seconds=1)
+
+    def acquire_ai_lease(self, principal_id) -> _TestLease:
+        del principal_id
+        return _TestLease()
+
+
+@pytest.fixture(autouse=True)
+def offline_rate_limiter():
+    previous = app.dependency_overrides.get(get_rate_limiter)
+    app.dependency_overrides[get_rate_limiter] = _UnlimitedTestRateLimiter
+    try:
+        yield
+    finally:
+        if previous is None:
+            app.dependency_overrides.pop(get_rate_limiter, None)
+        else:
+            app.dependency_overrides[get_rate_limiter] = previous

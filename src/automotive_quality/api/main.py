@@ -9,10 +9,15 @@ from sqlalchemy.exc import SQLAlchemyError
 from automotive_quality.infrastructure.database.session import get_engine
 from automotive_quality.shared.config import get_settings
 
-from .auth import AuthenticatedPrincipal, authenticated_principal, get_bearer_authenticator
+from .auth import AuthenticatedPrincipal, get_bearer_authenticator
+from .authorization import Permission
+from .rate_limits import OperationCategory, enforce_rate_limit
 from .v1 import router
 
-Authenticated = Annotated[AuthenticatedPrincipal, Depends(authenticated_principal)]
+Authenticated = Annotated[
+    AuthenticatedPrincipal,
+    Depends(enforce_rate_limit(Permission.READ, OperationCategory.READ)),
+]
 
 settings = get_settings()
 if settings.environment.lower() in {"shared", "staging", "production"}:

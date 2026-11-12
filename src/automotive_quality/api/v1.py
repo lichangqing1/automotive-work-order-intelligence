@@ -42,26 +42,48 @@ from automotive_quality.integrations.jira import JiraIssueTracker
 from automotive_quality.shared.config import get_settings
 
 from .auth import AuthenticatedPrincipal, authenticated_principal
-from .authorization import Permission, require_permission
+from .authorization import Permission
 from .dependencies import database_session, retrieval_service
+from .rate_limits import OperationCategory, enforce_rate_limit, ensure_ai_concurrency_protected
 
 router = APIRouter(prefix="/api/v1", dependencies=[Depends(authenticated_principal)])
 DatabaseSession = Annotated[Session, Depends(database_session)]
 Retrieval = Annotated[RetrievalService, Depends(retrieval_service)]
-Reader = Annotated[AuthenticatedPrincipal, Depends(require_permission(Permission.READ))]
-AIController = Annotated[AuthenticatedPrincipal, Depends(require_permission(Permission.OPERATE_AI))]
-RequirementOperator = Annotated[
+Reader = Annotated[
     AuthenticatedPrincipal,
-    Depends(require_permission(Permission.OPERATE_REQUIREMENTS)),
+    Depends(enforce_rate_limit(Permission.READ, OperationCategory.READ)),
+]
+BaselineAIController = Annotated[
+    AuthenticatedPrincipal,
+    Depends(enforce_rate_limit(Permission.OPERATE_AI, OperationCategory.AI)),
+]
+AIController = Annotated[
+    AuthenticatedPrincipal,
+    Depends(enforce_rate_limit(Permission.OPERATE_AI, OperationCategory.AI, ai_concurrency=True)),
+]
+RequirementAIController = Annotated[
+    AuthenticatedPrincipal,
+    Depends(enforce_rate_limit(Permission.OPERATE_REQUIREMENTS, OperationCategory.AI, ai_concurrency=True)),
+]
+JiraRequirementOperator = Annotated[
+    AuthenticatedPrincipal,
+    Depends(enforce_rate_limit(Permission.OPERATE_REQUIREMENTS, OperationCategory.JIRA)),
 ]
 TestSubmitter = Annotated[
     AuthenticatedPrincipal,
-    Depends(require_permission(Permission.SUBMIT_TEST_RESULTS)),
+    Depends(enforce_rate_limit(Permission.SUBMIT_TEST_RESULTS, OperationCategory.MUTATION)),
 ]
-Reviewer = Annotated[AuthenticatedPrincipal, Depends(require_permission(Permission.REVIEW))]
+Reviewer = Annotated[
+    AuthenticatedPrincipal,
+    Depends(enforce_rate_limit(Permission.REVIEW, OperationCategory.MUTATION)),
+]
+JiraReviewer = Annotated[
+    AuthenticatedPrincipal,
+    Depends(enforce_rate_limit(Permission.REVIEW, OperationCategory.JIRA)),
+]
 SyncOperator = Annotated[
     AuthenticatedPrincipal,
-    Depends(require_permission(Permission.RETRY_EXTERNAL_SYNC)),
+    Depends(enforce_rate_limit(Permission.RETRY_EXTERNAL_SYNC, OperationCategory.JIRA)),
 ]
 
 
@@ -206,7 +228,7 @@ def search(case: RetrievalRequest, _principal: Reader, service: Retrieval, top_k
 
 
 @router.post("/baselines/ai/resolution", response_model=ResolutionResponse)
-def resolution(case: RetrievalRequest, _principal: AIController, service: Retrieval, top_k: int = Query(5, ge=1, le=20)) -> ResolutionResponse:
+def resolution(case: RetrievalRequest, _principal: BaselineAIController, service: Retrieval, top_k: int = Query(5, ge=1, le=20)) -> ResolutionResponse:
     try:
         similar = service.search(case.dataset_version, _query(case), top_k=top_k)
     except RetrievalIndexNotReady as exc:
@@ -215,7 +237,7 @@ def resolution(case: RetrievalRequest, _principal: AIController, service: Retrie
 
 
 @router.post("/baselines/ai/rca", response_model=RCAResult)
-def rca(case: RetrievalRequest, _principal: AIController, service: Retrieval, top_k: int = Query(5, ge=1, le=20)) -> RCAResult:
+def rca(case: RetrievalRequest, _principal: BaselineAIController, service: Retrieval, top_k: int = Query(5, ge=1, le=20)) -> RCAResult:
     try:
         similar = service.search(case.dataset_version, _query(case), top_k=top_k)
     except RetrievalIndexNotReady as exc:
@@ -224,7 +246,7 @@ def rca(case: RetrievalRequest, _principal: AIController, service: Retrieval, to
 
 
 @router.post("/baselines/dq/rules/draft", response_model=DQRuleSpec)
-def draft_rule(_principal: AIController, requirement: str = Query(min_length=5)) -> DQRuleSpec:
+def draft_rule(_principal: BaselineAIController, requirement: str = Query(min_length=5)) -> DQRuleSpec:
     return generate_rule(requirement)
 
 
@@ -281,24 +303,30 @@ def get_dataset(version: str, _principal: Reader, session: DatabaseSession) -> d
 
 
 @router.post("/ai/requirements/analyze", response_model=RequirementAnalysis)
-def analyze_requirement(request: RequirementRequest, _principal: AIController, session: DatabaseSession) -> RequirementAnalysis:
-    return _ai_workflow(session).analyze_requirement(request.requirement)
+def analyze_requirement(request: RequirementRequest, principal: AIController, session: DatabaseSession) -> RequirementAnalysis:
+    result = _ai_workflow(session).analyze_requirement(request.requirement)
+    ensure_ai_concurrency_protected(principal)
+    return result
 
 
 @router.post("/ai/tests/generate", response_model=GeneratedTestSuite)
-def generate_tests(request: TestGenerationRequest, _principal: AIController, session: DatabaseSession) -> GeneratedTestSuite:
-    return _ai_workflow(session).generate_tests(request.requirement, request.analysis)
+def generate_tests(request: TestGenerationRequest, principal: AIController, session: DatabaseSession) -> GeneratedTestSuite:
+    result = _ai_workflow(session).generate_tests(request.requirement, request.analysis)
+    ensure_ai_concurrency_protected(principal)
+    return result
 
 
 @router.post("/ai/dq-rules/generate", response_model=RuleDraft)
-def generate_dq_rule(request: RequirementRequest, _principal: AIController, session: DatabaseSession) -> RuleDraft:
-    return _ai_workflow(session).generate_rule(request.requirement)
+def generate_dq_rule(request: RequirementRequest, principal: AIController, session: DatabaseSession) -> RuleDraft:
+    result = _ai_workflow(session).generate_rule(request.requirement)
+    ensure_ai_concurrency_protected(principal)
+    return result
 
 
 @router.post("/ai/rca/analyze", response_model=AIRootCauseAnalysis)
-def analyze_root_cause(request: RCARequest, _principal: AIController, session: DatabaseSession) -> AIRootCauseAnalysis:
+def analyze_root_cause(request: RCARequest, principal: AIController, session: DatabaseSession) -> AIRootCauseAnalysis:
     try:
-        return _ai_workflow(session).analyze_rca(request.evidence)
+        result = _ai_workflow(session).analyze_rca(request.evidence)
     except RCAEvidenceValidationError as exc:
         raise HTTPException(
             status_code=422,
@@ -309,26 +337,30 @@ def analyze_root_cause(request: RCARequest, _principal: AIController, session: D
             status_code=502,
             detail={"code": exc.code, "message": str(exc), "diagnostics": exc.diagnostics},
         ) from exc
+    ensure_ai_concurrency_protected(principal)
+    return result
 
 
 @router.post("/requirements/import/jira")
-def import_jira_requirement(request: JiraImportRequest, principal: RequirementOperator, session: DatabaseSession) -> dict[str, object]:
+def import_jira_requirement(request: JiraImportRequest, principal: JiraRequirementOperator, session: DatabaseSession) -> dict[str, object]:
     record = _testing_workflow(session).import_requirement(request.issue_key, actor_principal_id=principal.principal_id)
     return {"requirement_version_id": record.requirement_version_id, "requirement_id": record.requirement_id, "version": record.version, "external_reference": record.external_reference}
 
 
 @router.post("/requirements/{requirement_version_id}/analyze")
-def analyze_persisted_requirement(requirement_version_id: str, _principal: RequirementOperator, session: DatabaseSession) -> dict:
+def analyze_persisted_requirement(requirement_version_id: str, principal: RequirementAIController, session: DatabaseSession) -> dict:
     try:
-        return _testing_workflow(session).analyze(requirement_version_id)
+        result = _testing_workflow(session).analyze(requirement_version_id)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Requirement version not found") from exc
+    ensure_ai_concurrency_protected(principal)
+    return result
 
 
 @router.post("/requirements/{requirement_version_id}/generate-tests")
-def generate_persisted_tests(requirement_version_id: str, principal: RequirementOperator, session: DatabaseSession) -> dict:
+def generate_persisted_tests(requirement_version_id: str, principal: RequirementAIController, session: DatabaseSession) -> dict:
     try:
-        return _testing_workflow(session).generate_tests(
+        result = _testing_workflow(session).generate_tests(
             requirement_version_id,
             actor_principal_id=principal.principal_id,
         )
@@ -336,6 +368,8 @@ def generate_persisted_tests(requirement_version_id: str, principal: Requirement
         raise HTTPException(status_code=404, detail="Requirement version not found") from exc
     except WorkflowConflict as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    ensure_ai_concurrency_protected(principal)
+    return result
 
 
 @router.get("/reviews/{review_id}")
@@ -348,7 +382,7 @@ def get_review(review_id: str, _principal: Reader, session: DatabaseSession) -> 
 
 
 @router.post("/reviews/{review_id}/sync")
-def sync_review(review_id: str, principal: Reviewer, session: DatabaseSession) -> dict[str, object]:
+def sync_review(review_id: str, principal: JiraReviewer, session: DatabaseSession) -> dict[str, object]:
     try:
         _bind_reviewer(session, review_id, principal)
         review = _testing_workflow(session).sync_review(review_id)
