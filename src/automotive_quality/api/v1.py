@@ -1,14 +1,22 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import datetime, timezone
 from functools import lru_cache
-from typing import Annotated
+from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from automotive_quality.application.ai_operations import (
+    AIOperationConflict,
+    AIOperationState,
+    AIOperationStore,
+    OperationClaim,
+    canonical_request_hash,
+)
 from automotive_quality.application.ai_testing_workflow import (
     AITestingWorkflow,
     ExternalSyncUnavailable,
@@ -90,6 +98,7 @@ SyncOperator = Annotated[
     AuthenticatedPrincipal,
     Depends(enforce_rate_limit(Permission.RETRY_EXTERNAL_SYNC, OperationCategory.JIRA)),
 ]
+IdempotencyKey = Annotated[str | None, Header(alias="Idempotency-Key")]
 
 
 class RequirementRequest(BaseModel):
@@ -224,6 +233,105 @@ def _query(case: WorkOrderInput) -> str:
     return " ".join(filter(None, [case.error_code, case.description, case.ota_version]))
 
 
+def _operation_error(code: str, operation_id: str, message: str, status_code: int = 409) -> HTTPException:
+    return HTTPException(
+        status_code=status_code,
+        detail={"code": code, "operation_id": operation_id, "message": message},
+    )
+
+
+def _execute_idempotent_ai(
+    *,
+    session: Session,
+    principal: AuthenticatedPrincipal,
+    idempotency_key: str | None,
+    operation_type: str,
+    target_resource: str,
+    payload: object,
+    response: Response,
+    execute: Callable[[OperationClaim | None], Any],
+    ai_run_id: Callable[[], str | None],
+) -> Any:
+    settings = get_settings()
+    if not idempotency_key:
+        if settings.environment.lower() in {"shared", "staging", "production"}:
+            raise HTTPException(
+                status_code=428,
+                detail={"code": "IDEMPOTENCY_KEY_REQUIRED", "message": "Idempotency-Key is required"},
+            )
+        result = execute(None)
+        ensure_ai_concurrency_protected(principal)
+        return result
+
+    store = AIOperationStore(session)
+    try:
+        claim = store.claim(
+            principal_id=principal.principal_id,
+            operation_type=operation_type,
+            target_resource=target_resource,
+            idempotency_key=idempotency_key,
+            request_hash=canonical_request_hash(payload),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail={"code": "INVALID_IDEMPOTENCY_KEY", "message": str(exc)}) from exc
+    except AIOperationConflict as exc:
+        raise _operation_error(exc.code, exc.operation_id, str(exc)) from exc
+
+    response.headers["X-AI-Operation-ID"] = claim.operation_id
+    if not claim.is_owner:
+        if claim.state is AIOperationState.SUCCEEDED and claim.response_payload is not None:
+            response.headers["Idempotent-Replay"] = "true"
+            return claim.response_payload
+        messages = {
+            AIOperationState.RUNNING: ("OPERATION_IN_PROGRESS", "AI operation is already in progress"),
+            AIOperationState.AMBIGUOUS: (
+                "OPERATION_AMBIGUOUS",
+                "AI operation completion is ambiguous; inspect status and reconcile without automatic retry",
+            ),
+            AIOperationState.FAILED: ("OPERATION_FAILED", "AI operation previously failed"),
+        }
+        code, message = messages[claim.state]
+        raise _operation_error(code, claim.operation_id, message)
+
+    try:
+        result = execute(claim)
+        ensure_ai_concurrency_protected(principal)
+        serialized = result.model_dump(mode="json") if isinstance(result, BaseModel) else dict(result)
+        store.succeed(claim, serialized, ai_run_id=ai_run_id())
+        return result
+    except HTTPException as exc:
+        ambiguous = exc.status_code >= 500
+        store.fail(
+            claim,
+            "CONTROL_FAILURE" if ambiguous else "REQUEST_REJECTED",
+            ambiguous=ambiguous,
+            ai_run_id=ai_run_id(),
+        )
+        if ambiguous:
+            raise _operation_error(
+                "OPERATION_AMBIGUOUS",
+                claim.operation_id,
+                "AI operation completion is ambiguous; inspect status and reconcile without automatic retry",
+                status_code=503,
+            ) from exc
+        raise
+    except AIOperationConflict as exc:
+        raise _operation_error(exc.code, exc.operation_id, str(exc)) from exc
+    except Exception as exc:
+        store.fail(
+            claim,
+            "PROVIDER_COMPLETION_UNKNOWN",
+            ambiguous=True,
+            ai_run_id=ai_run_id(),
+        )
+        raise _operation_error(
+            "OPERATION_AMBIGUOUS",
+            claim.operation_id,
+            "AI operation completion is ambiguous; inspect status and reconcile without automatic retry",
+            status_code=503,
+        ) from exc
+
+
 def _bind_reviewer(
     session: Session,
     review_id: str,
@@ -344,42 +452,89 @@ def get_dataset(version: str, _principal: Reader, session: DatabaseSession) -> d
 
 
 @router.post("/ai/requirements/analyze", response_model=RequirementAnalysis)
-def analyze_requirement(request: RequirementRequest, principal: AIController, session: DatabaseSession) -> RequirementAnalysis:
-    result = _ai_workflow(session).analyze_requirement(request.requirement)
-    ensure_ai_concurrency_protected(principal)
-    return result
+def analyze_requirement(
+    request: RequirementRequest,
+    principal: AIController,
+    session: DatabaseSession,
+    response: Response,
+    idempotency_key: IdempotencyKey = None,
+) -> RequirementAnalysis:
+    workflow = _ai_workflow(session)
+    return _execute_idempotent_ai(
+        session=session, principal=principal, idempotency_key=idempotency_key,
+        operation_type="REQUIREMENT_ANALYSIS", target_resource="direct",
+        payload=request.model_dump(mode="json"), response=response,
+        execute=lambda _claim: workflow.analyze_requirement(request.requirement),
+        ai_run_id=lambda: workflow.last_run_id,
+    )
 
 
 @router.post("/ai/tests/generate", response_model=GeneratedTestSuite)
-def generate_tests(request: TestGenerationRequest, principal: AIController, session: DatabaseSession) -> GeneratedTestSuite:
-    result = _ai_workflow(session).generate_tests(request.requirement, request.analysis)
-    ensure_ai_concurrency_protected(principal)
-    return result
+def generate_tests(
+    request: TestGenerationRequest,
+    principal: AIController,
+    session: DatabaseSession,
+    response: Response,
+    idempotency_key: IdempotencyKey = None,
+) -> GeneratedTestSuite:
+    workflow = _ai_workflow(session)
+    return _execute_idempotent_ai(
+        session=session, principal=principal, idempotency_key=idempotency_key,
+        operation_type="TEST_GENERATION", target_resource="direct",
+        payload=request.model_dump(mode="json"), response=response,
+        execute=lambda _claim: workflow.generate_tests(request.requirement, request.analysis),
+        ai_run_id=lambda: workflow.last_run_id,
+    )
 
 
 @router.post("/ai/dq-rules/generate", response_model=RuleDraft)
-def generate_dq_rule(request: RequirementRequest, principal: AIController, session: DatabaseSession) -> RuleDraft:
-    result = _ai_workflow(session).generate_rule(request.requirement)
-    ensure_ai_concurrency_protected(principal)
-    return result
+def generate_dq_rule(
+    request: RequirementRequest,
+    principal: AIController,
+    session: DatabaseSession,
+    response: Response,
+    idempotency_key: IdempotencyKey = None,
+) -> RuleDraft:
+    workflow = _ai_workflow(session)
+    return _execute_idempotent_ai(
+        session=session, principal=principal, idempotency_key=idempotency_key,
+        operation_type="DQ_RULE_GENERATION", target_resource="direct",
+        payload=request.model_dump(mode="json"), response=response,
+        execute=lambda _claim: workflow.generate_rule(request.requirement),
+        ai_run_id=lambda: workflow.last_run_id,
+    )
 
 
 @router.post("/ai/rca/analyze", response_model=AIRootCauseAnalysis)
-def analyze_root_cause(request: RCARequest, principal: AIController, session: DatabaseSession) -> AIRootCauseAnalysis:
-    try:
-        result = _ai_workflow(session).analyze_rca(request.evidence)
-    except RCAEvidenceValidationError as exc:
-        raise HTTPException(
-            status_code=422,
-            detail={"code": exc.code, "message": str(exc), "diagnostics": exc.diagnostics},
-        ) from exc
-    except RCAProviderError as exc:
-        raise HTTPException(
-            status_code=502,
-            detail={"code": exc.code, "message": str(exc), "diagnostics": exc.diagnostics},
-        ) from exc
-    ensure_ai_concurrency_protected(principal)
-    return result
+def analyze_root_cause(
+    request: RCARequest,
+    principal: AIController,
+    session: DatabaseSession,
+    response: Response,
+    idempotency_key: IdempotencyKey = None,
+) -> AIRootCauseAnalysis:
+    workflow = _ai_workflow(session)
+
+    def execute(_claim: OperationClaim | None) -> AIRootCauseAnalysis:
+        try:
+            return workflow.analyze_rca(request.evidence)
+        except RCAEvidenceValidationError as exc:
+            raise HTTPException(
+                status_code=422,
+                detail={"code": exc.code, "message": str(exc), "diagnostics": exc.diagnostics},
+            ) from exc
+        except RCAProviderError as exc:
+            raise HTTPException(
+                status_code=502,
+                detail={"code": exc.code, "message": str(exc), "diagnostics": exc.diagnostics},
+            ) from exc
+
+    return _execute_idempotent_ai(
+        session=session, principal=principal, idempotency_key=idempotency_key,
+        operation_type="RCA_ANALYSIS", target_resource="direct",
+        payload=request.model_dump(mode="json"), response=response,
+        execute=execute, ai_run_id=lambda: workflow.last_run_id,
+    )
 
 
 @router.post("/requirements/import/jira")
@@ -398,28 +553,61 @@ def import_jira_requirement(request: JiraImportRequest, principal: JiraRequireme
 
 
 @router.post("/requirements/{requirement_version_id}/analyze")
-def analyze_persisted_requirement(requirement_version_id: str, principal: RequirementAIController, session: DatabaseSession) -> dict:
-    try:
-        result = _testing_workflow(session).analyze(requirement_version_id)
-    except KeyError as exc:
-        raise HTTPException(status_code=404, detail="Requirement version not found") from exc
-    ensure_ai_concurrency_protected(principal)
-    return result
+def analyze_persisted_requirement(
+    requirement_version_id: str,
+    principal: RequirementAIController,
+    session: DatabaseSession,
+    response: Response,
+    idempotency_key: IdempotencyKey = None,
+) -> dict:
+    workflow = _testing_workflow(session)
+
+    def execute(_claim: OperationClaim | None) -> dict:
+        try:
+            return workflow.analyze(
+                requirement_version_id,
+                lambda: ensure_ai_concurrency_protected(principal),
+            )
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="Requirement version not found") from exc
+
+    return _execute_idempotent_ai(
+        session=session, principal=principal, idempotency_key=idempotency_key,
+        operation_type="PERSISTED_REQUIREMENT_ANALYSIS", target_resource=requirement_version_id,
+        payload={"requirement_version_id": requirement_version_id}, response=response,
+        execute=execute, ai_run_id=lambda: workflow.ai.last_run_id,
+    )
 
 
 @router.post("/requirements/{requirement_version_id}/generate-tests")
-def generate_persisted_tests(requirement_version_id: str, principal: RequirementAIController, session: DatabaseSession) -> dict:
-    try:
-        result = _testing_workflow(session).generate_tests(
-            requirement_version_id,
-            actor_principal_id=principal.principal_id,
-        )
-    except KeyError as exc:
-        raise HTTPException(status_code=404, detail="Requirement version not found") from exc
-    except WorkflowConflict as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
-    ensure_ai_concurrency_protected(principal)
-    return result
+def generate_persisted_tests(
+    requirement_version_id: str,
+    principal: RequirementAIController,
+    session: DatabaseSession,
+    response: Response,
+    idempotency_key: IdempotencyKey = None,
+) -> dict:
+    workflow = _testing_workflow(session)
+
+    def execute(claim: OperationClaim | None) -> dict:
+        try:
+            return workflow.generate_tests(
+                requirement_version_id,
+                actor_principal_id=principal.principal_id,
+                ai_operation_id=claim.operation_id if claim else None,
+                before_side_effects=lambda: ensure_ai_concurrency_protected(principal),
+            )
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="Requirement version not found") from exc
+        except WorkflowConflict as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    return _execute_idempotent_ai(
+        session=session, principal=principal, idempotency_key=idempotency_key,
+        operation_type="PERSISTED_TEST_GENERATION", target_resource=requirement_version_id,
+        payload={"requirement_version_id": requirement_version_id}, response=response,
+        execute=execute, ai_run_id=lambda: workflow.ai.last_run_id,
+    )
 
 
 @router.get("/reviews/{review_id}")
@@ -531,6 +719,35 @@ def list_ai_value_experiments(_principal: Reader, session: DatabaseSession) -> l
         "dataset_version": run.dataset_version, "status": run.status,
         "summary": run.summary,
     } for run in runs]
+
+
+@router.get("/ai-operations/{operation_id}")
+def get_ai_operation_status(
+    operation_id: str,
+    principal: Reader,
+    session: DatabaseSession,
+) -> dict[str, object]:
+    operation = AIOperationStore(session).status(operation_id, principal.principal_id)
+    if operation is None:
+        raise HTTPException(status_code=404, detail="AI operation not found")
+    review = session.scalar(select(database_models.ReviewRequest).where(
+        database_models.ReviewRequest.ai_operation_id == operation_id
+    ))
+    return {
+        "operation_id": operation.operation_id,
+        "operation_type": operation.operation_type,
+        "target_resource": operation.target_resource,
+        "state": operation.state,
+        "ai_run_id": operation.ai_run_id,
+        "review_id": review.review_id if review else None,
+        "created_at": operation.created_at,
+        "completed_at": operation.completed_at,
+        "recovery": (
+            "MANUAL_RECONCILIATION_REQUIRED"
+            if operation.state in {AIOperationState.RUNNING.value, AIOperationState.AMBIGUOUS.value}
+            else "NONE"
+        ),
+    }
 
 
 @router.post("/external-sync/{link_id}/retry")

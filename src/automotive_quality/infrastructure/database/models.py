@@ -3,7 +3,19 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import JSON, DateTime, Float, ForeignKey, Index, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy import (
+    JSON,
+    CheckConstraint,
+    DateTime,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from .base import Base
@@ -245,6 +257,50 @@ class AIRun(Base):
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
+class AIOperation(Base):
+    __tablename__ = "ai_operations"
+    operation_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    principal_id: Mapped[str] = mapped_column(String(128), index=True)
+    operation_type: Mapped[str] = mapped_column(String(64))
+    target_resource: Mapped[str] = mapped_column(String(256))
+    idempotency_key: Mapped[str] = mapped_column(String(128))
+    request_hash: Mapped[str] = mapped_column(String(64))
+    state: Mapped[str] = mapped_column(String(24), index=True)
+    owner_token: Mapped[str] = mapped_column(String(64))
+    response_payload: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    response_status: Mapped[int | None] = mapped_column(Integer)
+    ai_run_id: Mapped[str | None] = mapped_column(String(36), index=True)
+    error_category: Mapped[str | None] = mapped_column(String(64))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    __table_args__ = (
+        CheckConstraint(
+            "state IN ('RUNNING', 'SUCCEEDED', 'FAILED', 'AMBIGUOUS')",
+            name="ck_ai_operations_state",
+        ),
+        CheckConstraint(
+            "(state = 'RUNNING' AND completed_at IS NULL) OR "
+            "(state IN ('SUCCEEDED', 'FAILED', 'AMBIGUOUS') AND completed_at IS NOT NULL)",
+            name="ck_ai_operations_terminal_timestamp",
+        ),
+        CheckConstraint(
+            "state != 'SUCCEEDED' OR response_payload IS NOT NULL",
+            name="ck_ai_operations_success_response",
+        ),
+        UniqueConstraint(
+            "principal_id",
+            "operation_type",
+            "target_resource",
+            "idempotency_key",
+            name="uq_ai_operations_scope_key",
+        ),
+    )
+
+
 class RequirementVersion(Base):
     __tablename__ = "requirement_versions"
     requirement_version_id: Mapped[str] = mapped_column(String(36), primary_key=True)
@@ -294,6 +350,9 @@ class ReviewRequest(Base):
     validated_coverage: Mapped[dict[str, list[str]] | None] = mapped_column(JSON)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    ai_operation_id: Mapped[str | None] = mapped_column(
+        ForeignKey("ai_operations.operation_id"), unique=True, index=True
+    )
 
 
 class ExternalIssueLink(Base):

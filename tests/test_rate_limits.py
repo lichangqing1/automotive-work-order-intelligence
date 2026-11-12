@@ -108,6 +108,7 @@ EXPECTED_CATEGORIES = {
     "/api/v1/reviews/{review_id}/decision": OperationCategory.MUTATION,
     "/api/v1/traceability/requirements/{requirement_version_id}": OperationCategory.READ,
     "/api/v1/ai-value/experiments": OperationCategory.READ,
+    "/api/v1/ai-operations/{operation_id}": OperationCategory.READ,
     "/api/v1/external-sync/{link_id}/retry": OperationCategory.JIRA,
 }
 

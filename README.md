@@ -89,6 +89,8 @@ Role permissions and authenticated actor auditing are documented in
 [`docs/API_AUTHORIZATION.md`](docs/API_AUTHORIZATION.md).
 Request limits, AI/Jira trust boundaries, deployment policy, and security-event
 logging are documented in [`docs/API_SECURITY_HARDENING.md`](docs/API_SECURITY_HARDENING.md).
+Provider retry and recovery behavior is documented in
+[`docs/AI_OPERATION_IDEMPOTENCY.md`](docs/AI_OPERATION_IDEMPOTENCY.md).
 
 ## Native development
 

@@ -26,6 +26,7 @@ business dependencies execute.
 | `GET /api/v1/reviews/{review_id}` | reader, operator, reviewer, administrator |
 | `GET /api/v1/traceability/requirements/{id}` | reader, operator, reviewer, administrator |
 | `GET /api/v1/ai-value/experiments` | reader, operator, reviewer, administrator |
+| `GET /api/v1/ai-operations/{operation_id}` | reader, operator, reviewer, administrator; own operations only |
 | `POST /api/v1/baselines/ai/resolution` | operator, administrator |
 | `POST /api/v1/baselines/ai/rca` | operator, administrator |
 | `POST /api/v1/baselines/dq/rules/draft` | operator, administrator |

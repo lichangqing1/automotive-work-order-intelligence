@@ -39,6 +39,11 @@ One API request is one concurrent provider operation even if the provider
 performs internal transport retries. Current workflows make one logical
 provider call per admitted request.
 
+Provider operations additionally use durable PostgreSQL idempotency claims.
+Successful replays still pass authentication, authorization, AI quota, and
+concurrency admission before the stored response is returned. See
+[durable AI operation idempotency](AI_OPERATION_IDEMPOTENCY.md).
+
 ## Redis failure policy
 
 AI, Jira, review/test mutations, and external sync fail closed with sanitized

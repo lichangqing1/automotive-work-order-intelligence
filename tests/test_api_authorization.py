@@ -54,6 +54,7 @@ EXPECTED_PERMISSIONS = {
     ("POST", "/api/v1/test-runs"): Permission.SUBMIT_TEST_RESULTS,
     ("GET", "/api/v1/traceability/requirements/{requirement_version_id}"): Permission.READ,
     ("GET", "/api/v1/ai-value/experiments"): Permission.READ,
+    ("GET", "/api/v1/ai-operations/{operation_id}"): Permission.READ,
     ("POST", "/api/v1/external-sync/{link_id}/retry"): Permission.RETRY_EXTERNAL_SYNC,
 }
 

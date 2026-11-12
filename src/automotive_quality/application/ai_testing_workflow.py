@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Callable
 from datetime import datetime, timezone
 from uuid import uuid4
 
@@ -64,13 +65,22 @@ class AITestingWorkflow:
         self.session.flush()
         return record
 
-    def analyze(self, requirement_version_id: str) -> dict:
+    def analyze(
+        self,
+        requirement_version_id: str,
+        before_side_effects: Callable[[], None] | None = None,
+    ) -> dict:
         requirement = self._requirement(requirement_version_id)
         result = self.ai.analyze_requirement(f"{requirement.summary}\n{requirement.description}")
         try:
+            if before_side_effects:
+                before_side_effects()
             requirement.analysis = result.model_dump(mode="json")
             requirement.analysis_ai_run_id = self.ai.last_run_id
-            self.session.flush()
+            if before_side_effects:
+                self.session.commit()
+            else:
+                self.session.flush()
         except Exception as exc:
             self.session.rollback()
             self.ai.mark_business_failure("requirement_analysis_persistence", exc)
@@ -81,10 +91,13 @@ class AITestingWorkflow:
         self,
         requirement_version_id: str,
         actor_principal_id: str | None = None,
+        *,
+        ai_operation_id: str | None = None,
+        before_side_effects: Callable[[], None] | None = None,
     ) -> dict:
         requirement = self._requirement(requirement_version_id)
         if requirement.analysis is None:
-            self.analyze(requirement_version_id)
+            self.analyze(requirement_version_id, before_side_effects)
         from automotive_quality.domains.ai.schemas import RequirementAnalysis
 
         suite = self.ai.generate_tests(requirement.description, RequirementAnalysis.model_validate(requirement.analysis))
@@ -95,6 +108,8 @@ class AITestingWorkflow:
         provider_test_ids: list[str] = []
         rejected = 0
         try:
+            if before_side_effects:
+                before_side_effects()
             for case in suite.cases:
                 signature = case.title.strip().casefold()
                 if signature in seen or not case.steps or not case.expected_result.strip():
@@ -133,17 +148,38 @@ class AITestingWorkflow:
                 provider_test_ids.append(case.test_id)
             if not version_ids:
                 raise WorkflowConflict("AI output contained no reviewable test cases")
-            review_id = f"REV-{uuid4().hex[:12].upper()}"
-            review = models.ReviewRequest(review_id=review_id, artifact_type="TEST_CASE_BATCH", artifact_ids=version_ids, status="REVIEW_REQUIRED", external_system=self.tracker.name)
+            review_id = (
+                f"REV-{hashlib.sha256(ai_operation_id.encode()).hexdigest()[:12].upper()}"
+                if ai_operation_id else f"REV-{uuid4().hex[:12].upper()}"
+            )
+            review = models.ReviewRequest(
+                review_id=review_id,
+                artifact_type="TEST_CASE_BATCH",
+                artifact_ids=version_ids,
+                status="REVIEW_REQUIRED",
+                external_system=self.tracker.name,
+                ai_operation_id=ai_operation_id,
+            )
             self.session.add(review)
             self.session.flush()
-            link = models.ExternalIssueLink(provider=self.tracker.name, issue_key=None, issue_url=None, artifact_type="REVIEW", artifact_id=review_id, idempotency_key=f"review:{review_id}", sync_status="PENDING", retry_count=0)
+            link = models.ExternalIssueLink(
+                provider=self.tracker.name,
+                issue_key=None,
+                issue_url=None,
+                artifact_type="REVIEW",
+                artifact_id=review_id,
+                idempotency_key=f"review:{ai_operation_id or review_id}",
+                sync_status="PENDING",
+                retry_count=0,
+            )
             self.session.add(link)
             self.session.commit()  # Drafts and review survive an external tracker outage.
         except Exception as exc:
             self.session.rollback()
             self.ai.mark_business_failure("generated_test_persistence", exc)
             raise
+        if before_side_effects:
+            before_side_effects()
         self._sync_link(link)
         return {"generation_run_id": ai_run_id, "generated": len(suite.cases), "accepted_for_review": len(version_ids), "rejected_by_validation": rejected, "review_id": review_id, "issue_key": link.issue_key, "sync_status": link.sync_status, "test_case_ids": case_ids, "test_case_version_ids": version_ids, "provider_test_ids": provider_test_ids}
 
