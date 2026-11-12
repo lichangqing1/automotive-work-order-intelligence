@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from functools import lru_cache
 from pathlib import Path
 
@@ -10,6 +11,9 @@ from .ai import assist_resolution, build_rca, generate_rule
 from .generator import generate_dataset
 from .models import DQRuleSpec, RCAResult, ResolutionResponse, SimilarCase, WorkOrderInput
 from .retrieval import CaseIndex
+
+if os.getenv("ENVIRONMENT", "local").lower() in {"shared", "staging", "production"}:
+    raise RuntimeError("The legacy compatibility API is disabled outside local development")
 
 app = FastAPI(
     title="Automotive Work Order Intelligence API",
@@ -55,4 +59,3 @@ def rca_assistant(case: WorkOrderInput, top_k: int = Query(5, ge=1, le=20)) -> R
 @app.post("/quality/rules/draft", response_model=DQRuleSpec)
 def draft_rule(requirement: str = Query(min_length=5)) -> DQRuleSpec:
     return generate_rule(requirement)
-

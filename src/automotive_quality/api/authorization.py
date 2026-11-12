@@ -6,6 +6,8 @@ from typing import Annotated
 
 from fastapi import Depends, HTTPException, status
 
+from automotive_quality.shared.security_logging import log_security_event
+
 from .auth import AuthenticatedPrincipal, authenticated_principal
 
 
@@ -38,6 +40,11 @@ def require_permission(permission: Permission) -> Callable[[AuthenticatedPrincip
     def authorize(principal: Authenticated) -> AuthenticatedPrincipal:
         allowed = any(permission in ROLE_PERMISSIONS.get(role, frozenset()) for role in principal.roles)
         if not allowed:
+            log_security_event(
+                "authorization_denied",
+                principal_id=principal.principal_id,
+                permission=permission.value,
+            )
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Authenticated principal is not authorized for this operation",

@@ -87,6 +87,8 @@ and rotation. The legacy `automotive.api` compatibility app is not an approved
 shared or production entry point.
 Role permissions and authenticated actor auditing are documented in
 [`docs/API_AUTHORIZATION.md`](docs/API_AUTHORIZATION.md).
+Request limits, AI/Jira trust boundaries, deployment policy, and security-event
+logging are documented in [`docs/API_SECURITY_HARDENING.md`](docs/API_SECURITY_HARDENING.md).
 
 ## Native development
 

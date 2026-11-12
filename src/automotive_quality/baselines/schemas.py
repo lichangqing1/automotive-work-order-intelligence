@@ -7,12 +7,12 @@ from pydantic import BaseModel, Field
 
 
 class WorkOrderInput(BaseModel):
-    vehicle_model: str
-    ota_version: str | None = None
-    description: str = Field(min_length=3)
-    error_code: str | None = None
+    vehicle_model: str = Field(min_length=1, max_length=128)
+    ota_version: str | None = Field(default=None, max_length=128)
+    description: str = Field(min_length=3, max_length=8_000)
+    error_code: str | None = Field(default=None, max_length=128)
     priority: Literal["P0", "P1", "P2", "P3"] = "P2"
-    category: str | None = None
+    category: str | None = Field(default=None, max_length=128)
 
 
 class SimilarCase(BaseModel):

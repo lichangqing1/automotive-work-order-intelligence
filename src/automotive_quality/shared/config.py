@@ -20,6 +20,11 @@ class Settings(BaseSettings):
     rate_limit_read_fail_open: bool = True
     ai_concurrency_per_principal: int = 2
     ai_concurrency_lease_seconds: int = 180
+    max_request_body_bytes: int = 1_048_576
+    api_trusted_hosts: str = "localhost,127.0.0.1,testserver"
+    api_cors_origins: str = ""
+    api_cors_allow_credentials: bool = False
+    api_docs_enabled: bool = True
     llm_provider: str = "mock"
     llm_model: str = "default"
     openai_api_key: str | None = None
@@ -48,10 +53,32 @@ class Settings(BaseSettings):
             "rate_limit_read_requests": self.rate_limit_read_requests,
             "ai_concurrency_per_principal": self.ai_concurrency_per_principal,
             "ai_concurrency_lease_seconds": self.ai_concurrency_lease_seconds,
+            "max_request_body_bytes": self.max_request_body_bytes,
         }
         if not self.rate_limit_namespace.strip() or any(value <= 0 for value in positive_controls.values()):
             raise ValueError("Rate-limit and concurrency settings must be positive and namespaced")
+        trusted_hosts = {item.strip() for item in self.api_trusted_hosts.split(",") if item.strip()}
+        cors_origins = {item.strip() for item in self.api_cors_origins.split(",") if item.strip()}
+        if not trusted_hosts:
+            raise ValueError("At least one trusted API host is required")
+        if self.api_cors_allow_credentials and "*" in cors_origins:
+            raise ValueError("Credentialed CORS cannot use a wildcard origin")
+        if self.environment.lower() in {"shared", "staging", "production"}:
+            if "*" in trusted_hosts:
+                raise ValueError("Wildcard trusted hosts are forbidden in shared environments")
+            if self.api_docs_enabled:
+                raise ValueError("Interactive API documentation must be disabled in shared environments")
+            if self.rate_limit_read_fail_open:
+                raise ValueError("Read rate limiting must fail closed in shared environments")
         return self
+
+    @property
+    def trusted_hosts(self) -> list[str]:
+        return [item.strip() for item in self.api_trusted_hosts.split(",") if item.strip()]
+
+    @property
+    def cors_origins(self) -> list[str]:
+        return [item.strip() for item in self.api_cors_origins.split(",") if item.strip()]
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 

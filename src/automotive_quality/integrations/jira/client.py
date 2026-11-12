@@ -4,6 +4,8 @@ import hashlib
 
 import httpx
 
+from automotive_quality.integrations.outbound_security import jira_comment, jira_payload
+
 
 class JiraIssueTracker:
     name = "JIRA"
@@ -34,6 +36,8 @@ class JiraIssueTracker:
         return ""
 
     def _create(self, summary: str, description: str, issue_type: str, external_id: str) -> str:
+        payload = jira_payload(summary, description, external_id)
+        summary, description, external_id = payload.summary, payload.description, payload.external_id
         cached_key = self._issue_keys_by_external_id.get(external_id)
         if cached_key is not None:
             return cached_key
@@ -67,7 +71,10 @@ class JiraIssueTracker:
         return self.get_issue(issue_key)["status"]
 
     def add_comment(self, issue_key: str, comment: str) -> None:
-        response = self.client.post(f"{self.base_url}/rest/api/3/issue/{issue_key}/comment", json={"body": self._adf(comment)})
+        response = self.client.post(
+            f"{self.base_url}/rest/api/3/issue/{issue_key}/comment",
+            json={"body": self._adf(jira_comment(comment))},
+        )
         response.raise_for_status()
 
     def transition_issue(self, issue_key: str, target_status: str) -> None:

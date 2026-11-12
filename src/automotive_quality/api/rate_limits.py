@@ -14,6 +14,7 @@ from redis import Redis
 from redis.exceptions import RedisError
 
 from automotive_quality.shared.config import Settings, get_settings
+from automotive_quality.shared.security_logging import log_security_event
 
 from .auth import AuthenticatedPrincipal
 from .authorization import Permission, require_permission
@@ -126,7 +127,7 @@ class RedisRateLimiter:
             token,
         )
         if not int(admitted):
-            LOGGER.warning("AI concurrency admission rejected")
+            log_security_event("ai_concurrency_rejected", principal_id=principal_id, category="ai")
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                 detail="AI concurrency capacity is temporarily exhausted",
@@ -211,7 +212,11 @@ def enforce_rate_limit(
                 detail="Request admission control is temporarily unavailable",
             ) from exc
         if not admission.allowed:
-            LOGGER.warning("Request rate admission rejected for category %s", category)
+            log_security_event(
+                "rate_limit_rejected",
+                principal_id=principal.principal_id,
+                category=category.value,
+            )
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                 detail="Request rate limit exceeded",
@@ -251,6 +256,7 @@ def ensure_ai_concurrency_protected(principal: AuthenticatedPrincipal) -> None:
     if isinstance(principal, AdmittedPrincipal):
         lease = principal.concurrency_lease
         if lease is not None and lease.renewal_failed:
+            log_security_event("ai_concurrency_lease_lost", principal_id=principal.principal_id, category="ai")
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="AI concurrency protection was lost during execution",

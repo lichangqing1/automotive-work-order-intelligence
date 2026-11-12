@@ -5,11 +5,15 @@ from functools import lru_cache
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from automotive_quality.application.ai_testing_workflow import AITestingWorkflow, WorkflowConflict
+from automotive_quality.application.ai_testing_workflow import (
+    AITestingWorkflow,
+    ExternalSyncUnavailable,
+    WorkflowConflict,
+)
 from automotive_quality.application.runtime import database_kpis
 from automotive_quality.baselines.deterministic_ai import assist_resolution, build_rca, generate_rule
 from automotive_quality.baselines.schemas import DQRuleSpec, RCAResult, ResolutionResponse, WorkOrderInput
@@ -40,6 +44,7 @@ from automotive_quality.infrastructure.database.repositories import AIRunReposit
 from automotive_quality.integrations.issue_tracker import IssueTracker, LocalIssueTracker
 from automotive_quality.integrations.jira import JiraIssueTracker
 from automotive_quality.shared.config import get_settings
+from automotive_quality.shared.security_logging import log_security_event
 
 from .auth import AuthenticatedPrincipal, authenticated_principal
 from .authorization import Permission
@@ -88,11 +93,11 @@ SyncOperator = Annotated[
 
 
 class RequirementRequest(BaseModel):
-    requirement: str
+    requirement: str = Field(min_length=5, max_length=12_000)
 
 
 class TestGenerationRequest(BaseModel):
-    requirement: str
+    requirement: str = Field(min_length=5, max_length=12_000)
     analysis: RequirementAnalysis
 
 
@@ -101,18 +106,36 @@ class RCARequest(BaseModel):
 
 
 class RetrievalRequest(WorkOrderInput):
-    dataset_version: str
+    dataset_version: str = Field(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]*$")
 
 
 class JiraImportRequest(BaseModel):
-    issue_key: str
+    issue_key: str = Field(
+        min_length=1,
+        max_length=128,
+        pattern=r"^[A-Za-z][A-Za-z0-9_]*-[A-Za-z0-9][A-Za-z0-9_-]*$",
+    )
 
 
 class TestRunRequest(BaseModel):
-    requirement_version_id: str
-    test_case_version_ids: list[str]
-    dataset_version: str
-    actuals: dict[str, str] = Field(default_factory=dict)
+    requirement_version_id: str = Field(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]*$")
+    test_case_version_ids: list[str] = Field(max_length=100)
+    dataset_version: str = Field(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]*$")
+    actuals: dict[str, str] = Field(default_factory=dict, max_length=100)
+
+    @field_validator("test_case_version_ids")
+    @classmethod
+    def test_case_ids_are_bounded(cls, value: list[str]) -> list[str]:
+        if any(not item or len(item) > 128 for item in value):
+            raise ValueError("test-case version IDs must be between 1 and 128 characters")
+        return value
+
+    @field_validator("actuals")
+    @classmethod
+    def actual_results_are_bounded(cls, value: dict[str, str]) -> dict[str, str]:
+        if any(not key or len(key) > 128 or len(result) > 8_000 for key, result in value.items()):
+            raise ValueError("actual-result keys or values exceed their limits")
+        return value
 
 
 class TestRunResponse(BaseModel):
@@ -128,15 +151,33 @@ class TestRunResponse(BaseModel):
 
 
 class ReviewDecisionRequest(BaseModel):
-    status: str
-    reviewer: str | None = None
-    comment: str | None = None
+    status: str = Field(min_length=1, max_length=64)
+    reviewer: str | None = Field(default=None, max_length=128)
+    comment: str | None = Field(default=None, max_length=4_000)
 
 
 class ReviewAssessmentRequest(BaseModel):
     was_modified: bool
-    validated_coverage: dict[str, list[str]]
-    rejection_reasons: list[str] = []
+    validated_coverage: dict[str, list[str]] = Field(max_length=100)
+    rejection_reasons: list[str] = Field(default_factory=list, max_length=100)
+
+    @field_validator("validated_coverage")
+    @classmethod
+    def coverage_is_bounded(cls, value: dict[str, list[str]]) -> dict[str, list[str]]:
+        if any(
+            not key or len(key) > 128 or len(labels) > 100
+            or any(not label or len(label) > 512 for label in labels)
+            for key, labels in value.items()
+        ):
+            raise ValueError("validated coverage exceeds its limits")
+        return value
+
+    @field_validator("rejection_reasons")
+    @classmethod
+    def rejection_reasons_are_bounded(cls, value: list[str]) -> list[str]:
+        if any(not item.strip() or len(item) > 4_000 for item in value):
+            raise ValueError("rejection reasons must be non-blank and bounded")
+        return value
 
 
 @lru_cache(maxsize=1)
@@ -343,7 +384,16 @@ def analyze_root_cause(request: RCARequest, principal: AIController, session: Da
 
 @router.post("/requirements/import/jira")
 def import_jira_requirement(request: JiraImportRequest, principal: JiraRequirementOperator, session: DatabaseSession) -> dict[str, object]:
-    record = _testing_workflow(session).import_requirement(request.issue_key, actor_principal_id=principal.principal_id)
+    try:
+        record = _testing_workflow(session).import_requirement(
+            request.issue_key,
+            actor_principal_id=principal.principal_id,
+        )
+    except ExternalSyncUnavailable as exc:
+        raise HTTPException(
+            status_code=502,
+            detail={"code": "EXTERNAL_SYNC_UNAVAILABLE", "message": str(exc)},
+        ) from exc
     return {"requirement_version_id": record.requirement_version_id, "requirement_id": record.requirement_id, "version": record.version, "external_reference": record.external_reference}
 
 
@@ -390,6 +440,11 @@ def sync_review(review_id: str, principal: JiraReviewer, session: DatabaseSessio
         raise HTTPException(status_code=404, detail="Review not found") from exc
     except WorkflowConflict as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ExternalSyncUnavailable as exc:
+        raise HTTPException(
+            status_code=502,
+            detail={"code": "EXTERNAL_SYNC_UNAVAILABLE", "message": str(exc)},
+        ) from exc
     return {"review_id": review.review_id, "status": review.status, "artifact_ids": review.artifact_ids}
 
 
@@ -436,6 +491,11 @@ def decide_local_review(review_id: str, request: ReviewDecisionRequest, principa
     tracker.set_issue_status(link.issue_key, request.status)
     review.review_comment = request.comment
     synced = _testing_workflow(session).sync_review(review_id)
+    log_security_event(
+        "review_decision",
+        principal_id=principal.principal_id,
+        reason="administrator_override" if "administrator" in principal.roles else "reviewer_decision",
+    )
     return {"review_id": synced.review_id, "status": synced.status, "artifact_ids": synced.artifact_ids}
 
 
@@ -484,4 +544,10 @@ def retry_external_sync(link_id: int, principal: SyncOperator, session: Database
         raise HTTPException(status_code=404, detail="External sync record not found") from exc
     except WorkflowConflict as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
-    return {"link_id": link.link_id, "issue_key": link.issue_key, "sync_status": link.sync_status, "sync_error": link.sync_error, "retry_count": link.retry_count}
+    return {
+        "link_id": link.link_id,
+        "issue_key": link.issue_key,
+        "sync_status": link.sync_status,
+        "sync_error": link.sync_error,
+        "retry_count": link.retry_count,
+    }

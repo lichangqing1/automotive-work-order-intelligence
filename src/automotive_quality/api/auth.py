@@ -13,6 +13,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
 from automotive_quality.shared.config import Settings, get_settings
+from automotive_quality.shared.security_logging import log_security_event
 
 
 class AuthConfigurationError(RuntimeError):
@@ -140,6 +141,7 @@ def get_bearer_authenticator() -> BearerAuthenticator:
 
 
 def _authentication_failure() -> HTTPException:
+    log_security_event("authentication_failure", reason="invalid_or_missing_credential")
     return HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Invalid or missing bearer credential",
@@ -160,6 +162,7 @@ def authenticated_principal(credentials: BearerCredentials) -> AuthenticatedPrin
     try:
         authenticator = get_bearer_authenticator()
     except AuthConfigurationError as exc:
+        log_security_event("authentication_unavailable", reason="invalid_configuration")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="API authentication is unavailable",

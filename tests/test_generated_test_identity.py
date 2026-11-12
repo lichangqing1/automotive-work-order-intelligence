@@ -288,7 +288,7 @@ def test_external_tracker_failure_preserves_drafts_and_retry_state(identity_sess
     assert identity_session.get(models.TestCase, version.test_case_id) is not None
     assert identity_session.get(models.ReviewRequest, generated["review_id"]) is not None
     assert link is not None and link.retry_count == 1
-    assert "synthetic tracker outage" in link.sync_error
+    assert link.sync_error == "EXTERNAL_FAILURE: external synchronization failed"
 
 
 def test_concurrent_generation_uses_unique_platform_identities(tmp_path: Path) -> None:

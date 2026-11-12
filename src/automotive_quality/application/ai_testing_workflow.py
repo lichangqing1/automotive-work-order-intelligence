@@ -12,9 +12,15 @@ from automotive_quality.domains.ai.schemas import RCAEvidenceItem, RCAEvidenceRe
 from automotive_quality.domains.ai.workflows import AIWorkflowService
 from automotive_quality.infrastructure.database import models
 from automotive_quality.integrations.issue_tracker import IssueTracker
+from automotive_quality.integrations.outbound_security import safe_external_error
+from automotive_quality.shared.security_logging import log_security_event
 
 
 class WorkflowConflict(ValueError):
+    pass
+
+
+class ExternalSyncUnavailable(RuntimeError):
     pass
 
 
@@ -31,7 +37,17 @@ class AITestingWorkflow:
         issue_key: str,
         actor_principal_id: str | None = None,
     ) -> models.RequirementVersion:
-        issue = self.tracker.get_issue(issue_key)
+        try:
+            issue = self.tracker.get_issue(issue_key)
+        except Exception as exc:
+            log_security_event("external_sync_failure", reason=safe_external_error(exc).split(":", 1)[0])
+            raise ExternalSyncUnavailable("External requirement service is unavailable") from exc
+        if (
+            not issue.get("summary")
+            or len(issue["summary"]) > 512
+            or len(issue.get("description", "")) > 12_000
+        ):
+            raise WorkflowConflict("External requirement content violates input limits")
         content = f"{issue['summary']}\n{issue['description']}"
         content_hash = hashlib.sha256(content.encode()).hexdigest()
         latest = self.session.scalar(select(models.RequirementVersion).where(models.RequirementVersion.external_reference == issue_key).order_by(models.RequirementVersion.version.desc()))
@@ -138,7 +154,15 @@ class AITestingWorkflow:
         link = self.session.scalar(select(models.ExternalIssueLink).where(models.ExternalIssueLink.artifact_type == "REVIEW", models.ExternalIssueLink.artifact_id == review_id))
         if link is None or not link.issue_key:
             raise WorkflowConflict("Review has no external issue")
-        external_status = self.tracker.get_issue_status(link.issue_key)
+        try:
+            external_status = self.tracker.get_issue_status(link.issue_key)
+        except Exception as exc:
+            link.sync_status = "FAILED"
+            link.sync_error = safe_external_error(exc)
+            link.retry_count += 1
+            self.session.commit()
+            log_security_event("external_sync_failure", reason=link.sync_error.split(":", 1)[0])
+            raise ExternalSyncUnavailable("External review synchronization is unavailable") from exc
         mapped = "APPROVED" if external_status.casefold() in self.approved_statuses else "REJECTED" if external_status.casefold() in self.rejected_statuses else "REVIEW_REQUIRED"
         if mapped != "REVIEW_REQUIRED":
             now = datetime.now(timezone.utc)
@@ -288,8 +312,9 @@ class AITestingWorkflow:
                 link = self.session.get(models.ExternalIssueLink, result.external_issue_link_id)
                 assert link is not None
                 link.sync_status = "FAILED"
-                link.sync_error = f"{type(exc).__name__}: {exc}"
+                link.sync_error = safe_external_error(exc)
                 link.retry_count += 1
+                log_security_event("external_sync_failure", reason=link.sync_error.split(":", 1)[0])
                 self.session.commit()
         failed = len(failures)
         total = len(versions)
@@ -374,8 +399,9 @@ class AITestingWorkflow:
             link.synced_at = datetime.now(timezone.utc)
         except Exception as exc:  # noqa: BLE001 - external failure is durable retry state
             link.sync_status = "FAILED"
-            link.sync_error = f"{type(exc).__name__}: {exc}"
+            link.sync_error = safe_external_error(exc)
             link.retry_count += 1
+            log_security_event("external_sync_failure", reason=link.sync_error.split(":", 1)[0])
         self.session.commit()
 
     def _requirement(self, requirement_version_id: str) -> models.RequirementVersion:
