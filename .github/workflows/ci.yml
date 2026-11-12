@@ -28,7 +28,7 @@ jobs:
       DATABASE_URL: postgresql+psycopg://automotive:automotive@localhost:5432/automotive_verify
       REDIS_TEST_URL: redis://localhost:6379/15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -63,13 +63,13 @@ jobs:
   container:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - run: docker build -t automotive-quality-platform:test .
 
   dependency-security:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -85,7 +85,7 @@ jobs:
       run:
         working-directory: landing
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v4
         with:
           version: 10
