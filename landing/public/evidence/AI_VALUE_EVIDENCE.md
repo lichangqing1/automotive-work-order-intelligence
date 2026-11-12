@@ -48,7 +48,10 @@ Test generation uses 30 requirements and measures validated scenario coverage, a
 
 Human-effort saving was 48.98%, and end-to-end time saving was 19.00%. The proposed quality policy returned `BLOCK`: schema validity, executable rate, and duplicate rate passed; requirement coverage, negative coverage, unsupported-assumption rate, and approval rate failed their thresholds.
 
-## RCA results
+## RCA results and metric correction
+
+The table below is the preserved historical v1 report. It remains available
+for provenance and must not be treated as the current portfolio interpretation.
 
 | Metric | Baseline mean | AI mean | AI minus baseline |
 | --- | ---: | ---: | ---: |
@@ -60,11 +63,20 @@ Human-effort saving was 48.98%, and end-to-end time saving was 19.00%. The propo
 | Root-cause accuracy | 20.00% | 0.00% | -20.00 pp |
 | Recommended-check usefulness | n/a | 75.56% | n/a |
 
-The proposed RCA policy returned `BLOCK`. Evidence support passed, while unsupported claims, correct abstention, and root-cause accuracy failed their thresholds.
+The proposed historical RCA policy returned `BLOCK`.
+
+The later `rca-metrics-v2` integrity review separated citation validity,
+evidence correctness, and actual claim support. Re-scoring the same immutable
+outputs and 90/90 reviews produced 13.33% AI evidence support, 76.67%
+unsupported claims, and 0% root-cause accuracy. The corrected policy also
+returned `BLOCK`. Current recruiter-facing pages use these corrected values;
+the original JSON remains unchanged. See
+`docs/reports/RCA_METRIC_INTEGRITY_V2_COMPARISON.md` and
+`docs/portfolio/data/rca_metrics_v2.json` in the source repository.
 
 ## Improvements and regressions
 
-AI-assisted test generation increased reviewed coverage and reduced measured human and end-to-end effort. AI-assisted RCA reduced investigation time and its recommended checks received a 75.56% usefulness score. Material regressions remain: every generated test recorded at least one unsupported assumption, and RCA accuracy and abstention were worse than the deterministic baseline. These regressions are retained in the evidence and are not averaged away.
+AI-assisted test generation increased reviewed coverage and reduced measured human and end-to-end effort. AI-assisted RCA reduced investigation time and its recommended checks received a 75.56% usefulness score. Material regressions remain: every generated test recorded at least one unsupported assumption, corrected RCA evidence support was only 13.33%, corrected unsupported claims were 76.67%, and root-cause accuracy was 0%. These regressions are retained in the evidence and are not averaged away.
 
 ## Interpretation and limitations
 

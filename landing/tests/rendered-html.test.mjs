@@ -61,10 +61,15 @@ test("renders readable bilingual evidence hubs with navigation and source artifa
   assert.match(english, /On this page/);
   assert.match(english, /Publication-complete does not mean production-approved/);
   assert.match(english, /Need the machine-readable evidence/);
+  assert.match(english, /13\.33% evidence support/);
+  assert.match(english, /76\.67% unsupported claims/);
+  assert.match(english, /historical provenance/);
   assert.match(chinese, /让证据更易于/);
   assert.match(chinese, /本页目录/);
   assert.match(chinese, /证据完整，不等于可自主上线/);
   assert.match(chinese, /需要查看机器可读证据/);
+  assert.match(chinese, /证据支持率 13\.33%/);
+  assert.match(chinese, /无依据结论率 76\.67%/);
   assert.match(chinese, /href="\/en\/evidence"/);
   for (const anchor of ["project-guide", "ai-value", "test-generation", "rca", "architecture", "reproducibility", "source-artifacts"]){
     assert.match(english, new RegExp(`id="${anchor}"`));
